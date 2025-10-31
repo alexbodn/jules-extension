@@ -5,6 +5,17 @@ import * as vscode from "vscode";
 // Constants
 const JULES_API_BASE_URL = "https://jules.googleapis.com/v1alpha";
 
+// GitHub PR status cache to avoid excessive API calls
+interface PRStatusCache {
+  [prUrl: string]: {
+    isClosed: boolean;
+    lastChecked: number;
+  };
+}
+
+const prStatusCache: PRStatusCache = {};
+const PR_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+
 interface Source {
   name?: string;
   id?: string;
@@ -138,6 +149,64 @@ function extractPRUrl(sessionOrState: Session | SessionState): string | null {
   return (
     sessionOrState.outputs?.find((o) => o.pullRequest)?.pullRequest?.url || null
   );
+}
+
+async function checkPRStatus(
+  prUrl: string,
+  context: vscode.ExtensionContext
+): Promise<boolean> {
+  // Check cache first
+  const cached = prStatusCache[prUrl];
+  const now = Date.now();
+  if (cached && now - cached.lastChecked < PR_CACHE_DURATION) {
+    return cached.isClosed;
+  }
+
+  try {
+    // Parse GitHub PR URL: https://github.com/owner/repo/pull/123
+    const match = prUrl.match(
+      /github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/
+    );
+    if (!match) {
+      console.log(`Jules: Invalid GitHub PR URL format: ${prUrl}`);
+      return false;
+    }
+
+    const [, owner, repo, prNumber] = match;
+    const apiUrl = `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}`;
+
+    // Get GitHub token if available
+    const githubToken = await context.secrets.get("jules-github-token");
+    const headers: Record<string, string> = {
+      Accept: "application/vnd.github.v3+json",
+    };
+    if (githubToken) {
+      headers.Authorization = `Bearer ${githubToken}`;
+    }
+
+    const response = await fetch(apiUrl, { headers });
+
+    if (!response.ok) {
+      console.log(
+        `Jules: Failed to fetch PR status: ${response.status} ${response.statusText}`
+      );
+      return false;
+    }
+
+    const prData = (await response.json()) as { state: string };
+    const isClosed = prData.state === "closed";
+
+    // Update cache
+    prStatusCache[prUrl] = {
+      isClosed,
+      lastChecked: now,
+    };
+
+    return isClosed;
+  } catch (error) {
+    console.error(`Jules: Error checking PR status for ${prUrl}:`, error);
+    return false;
+  }
 }
 
 function checkForCompletedSessions(currentSessions: Session[]): Session[] {
@@ -520,8 +589,7 @@ function getActivityIcon(activity: Activity): string {
 }
 
 class JulesSessionsProvider
-  implements vscode.TreeDataProvider<vscode.TreeItem>
-{
+  implements vscode.TreeDataProvider<vscode.TreeItem> {
   private _onDidChangeTreeData: vscode.EventEmitter<
     vscode.TreeItem | undefined | null | void
   > = new vscode.EventEmitter<vscode.TreeItem | undefined | null | void>();
@@ -532,7 +600,7 @@ class JulesSessionsProvider
   private sessionsCache: Session[] = [];
   private isFetching = false;
 
-  constructor(private context: vscode.ExtensionContext) {}
+  constructor(private context: vscode.ExtensionContext) { }
 
   private async fetchAndProcessSessions(
     isBackground: boolean = false
@@ -670,7 +738,7 @@ class JulesSessionsProvider
     }
 
     // Now, use the cache to build the tree
-    const filteredSessions = this.sessionsCache.filter(
+    let filteredSessions = this.sessionsCache.filter(
       (session) =>
         (session as any).sourceContext?.source === selectedSource.name
     );
@@ -678,6 +746,48 @@ class JulesSessionsProvider
     console.log(
       `Jules: Found ${filteredSessions.length} sessions for the selected source from cache`
     );
+
+    // Filter out sessions with closed PRs if the setting is enabled
+    const hideClosedPRs = vscode.workspace
+      .getConfiguration("jules-extension")
+      .get<boolean>("hideClosedPRSessions", true);
+
+    if (hideClosedPRs) {
+      const sessionsToCheck = filteredSessions.filter(
+        (session) => session.state === "COMPLETED" && extractPRUrl(session)
+      );
+
+      // Check PR statuses in parallel
+      const prStatusChecks = await Promise.all(
+        sessionsToCheck.map(async (session) => {
+          const prUrl = extractPRUrl(session);
+          if (!prUrl) {
+            return { session, isClosed: false };
+          }
+          const isClosed = await checkPRStatus(prUrl, this.context);
+          return { session, isClosed };
+        })
+      );
+
+      // Create a set of sessions with closed PRs
+      const closedPRSessionNames = new Set(
+        prStatusChecks
+          .filter((result) => result.isClosed)
+          .map((result) => result.session.name)
+      );
+
+      // Filter out sessions with closed PRs
+      const beforeFilterCount = filteredSessions.length;
+      filteredSessions = filteredSessions.filter(
+        (session) => !closedPRSessionNames.has(session.name)
+      );
+
+      if (closedPRSessionNames.size > 0) {
+        console.log(
+          `Jules: Filtered out ${closedPRSessionNames.size} sessions with closed PRs (${beforeFilterCount} -> ${filteredSessions.length})`
+        );
+      }
+    }
 
     if (filteredSessions.length === 0) {
       return [new vscode.TreeItem("No sessions found for this source.")];
@@ -1080,8 +1190,7 @@ export function activate(context: vscode.ExtensionContext) {
         );
       } catch (error) {
         vscode.window.showErrorMessage(
-          `Failed to create session: ${
-            error instanceof Error ? error.message : "Unknown error"
+          `Failed to create session: ${error instanceof Error ? error.message : "Unknown error"
           }`
         );
       }
@@ -1180,18 +1289,16 @@ export function activate(context: vscode.ExtensionContext) {
             const timestamp = new Date(activity.createTime).toLocaleString();
             let message = "";
             if (activity.planGenerated) {
-              message = `Plan generated: ${
-                activity.planGenerated.plan?.title || "Plan"
-              }`;
+              message = `Plan generated: ${activity.planGenerated.plan?.title || "Plan"
+                }`;
               planDetected = true;
             } else if (activity.planApproved) {
               message = `Plan approved: ${activity.planApproved.planId}`;
             } else if (activity.progressUpdated) {
-              message = `Progress: ${activity.progressUpdated.title}${
-                activity.progressUpdated.description
+              message = `Progress: ${activity.progressUpdated.title}${activity.progressUpdated.description
                   ? " - " + activity.progressUpdated.description
                   : ""
-              }`;
+                }`;
             } else if (activity.sessionCompleted) {
               message = "Session completed";
             } else {
@@ -1261,6 +1368,96 @@ export function activate(context: vscode.ExtensionContext) {
     }
   );
 
+  const deleteSessionDisposable = vscode.commands.registerCommand(
+    "jules-extension.deleteSession",
+    async (item?: SessionTreeItem) => {
+      if (!item || !(item instanceof SessionTreeItem)) {
+        vscode.window.showErrorMessage("No session selected.");
+        return;
+      }
+
+      const session = item.session;
+      const confirm = await vscode.window.showWarningMessage(
+        `本当にセッション "${session.title}" をローカルキャッシュから削除しますか？\n\n注意: これは表示上の削除のみで、Julesサーバー上のセッションは削除されません。`,
+        { modal: true },
+        "削除する"
+      );
+
+      if (confirm !== "削除する") {
+        return;
+      }
+
+      // Remove from previous states to hide it
+      previousSessionStates.delete(session.name);
+      await context.globalState.update(
+        "jules.previousSessionStates",
+        Object.fromEntries(previousSessionStates)
+      );
+
+      vscode.window.showInformationMessage(
+        `セッション "${session.title}" をローカルキャッシュから削除しました。`
+      );
+
+      // Refresh the view
+      sessionsProvider.refresh();
+    }
+  );
+
+  const setGithubTokenDisposable = vscode.commands.registerCommand(
+    "jules-extension.setGithubToken",
+    async () => {
+      try {
+        const token = await vscode.window.showInputBox({
+          prompt:
+            "GitHub Personal Access Token を入力してください（PRのステータスチェック用）",
+          password: true,
+          placeHolder: "ghp_xxxxxxxxxxxxxxxxxxxx",
+          ignoreFocusOut: true,
+        });
+
+        if (token === undefined) {
+          // User cancelled the input
+          console.log("Jules: GitHub Token input cancelled by user");
+          return;
+        }
+
+        if (token === "") {
+          vscode.window.showWarningMessage(
+            "GitHub Token を入力してください。キャンセルしました。"
+          );
+          return;
+        }
+
+        // Validate token format
+        if (!token.startsWith("ghp_") && !token.startsWith("github_pat_")) {
+          const proceed = await vscode.window.showWarningMessage(
+            "入力したトークンが GitHub のトークン形式ではないようです。本当に保存しますか？",
+            { modal: true },
+            "保存する",
+            "キャンセル"
+          );
+          if (proceed !== "保存する") {
+            return;
+          }
+        }
+
+        await context.secrets.store("jules-github-token", token);
+        vscode.window.showInformationMessage(
+          "GitHub Token を安全に保存しました。"
+        );
+        // Clear PR status cache when token changes
+        Object.keys(prStatusCache).forEach((key) => delete prStatusCache[key]);
+        sessionsProvider.refresh();
+      } catch (error) {
+        console.error("Jules: Error setting GitHub Token:", error);
+        vscode.window.showErrorMessage(
+          `GitHub Token の保存に失敗しました: ${error instanceof Error ? error.message : "Unknown error"
+          }`
+        );
+      }
+    }
+  );
+
   context.subscriptions.push(
     setApiKeyDisposable,
     verifyApiKeyDisposable,
@@ -1272,7 +1469,9 @@ export function activate(context: vscode.ExtensionContext) {
     refreshActivitiesDisposable,
     sendMessageDisposable,
     approvePlanDisposable,
-    openSettingsDisposable
+    openSettingsDisposable,
+    deleteSessionDisposable,
+    setGithubTokenDisposable
   );
 }
 
