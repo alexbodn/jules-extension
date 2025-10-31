@@ -35,6 +35,7 @@ This extension was created to take your development experience to the next level
 | **Real-time Monitoring** | See Jules' current work status (`Running`, `Active`, `Done`, etc.) at a glance in the dedicated view added to the sidebar. No more switching between browser and editor repeatedly.                                     | `julesSessionsView`               |
 | **Progress Updates**     | When you're curious about how far Jules has progressed, click the `↻` (refresh) button. Instantly retrieve and update the session status and the latest activity list performed by Jules.                               | `jules-extension.refreshSessions` |
 | **Activity Display**     | When you select a session, you can check detailed logs of commands Jules executed, files edited, thought processes, and more. Provides a transparent development experience, as if you're peering into Jules' thinking. | `jules-extension.showActivities`  |
+| **PR Status Filtering**  | Automatically hide sessions with closed or merged pull requests from the session list. Helps keep your workspace clean by filtering out completed work. Can be toggled in settings.                                     | `jules-extension.hideClosedPRSessions` (setting) |
 
 ## 📦 Installation
 
