@@ -96,6 +96,7 @@ interface SessionState {
   state: string;
   rawState: string;
   outputs?: SessionOutput[];
+  isTerminated?: boolean;
 }
 
 let previousSessionStates: Map<string, SessionState> = new Map();
@@ -213,6 +214,9 @@ function checkForCompletedSessions(currentSessions: Session[]): Session[] {
   const completedSessions: Session[] = [];
   for (const session of currentSessions) {
     const prevState = previousSessionStates.get(session.name);
+    if (prevState?.isTerminated) {
+      continue; // Skip terminated sessions
+    }
     if (
       session.state === "COMPLETED" &&
       (!prevState || prevState.state !== "COMPLETED")
@@ -231,6 +235,9 @@ function checkForPlansAwaitingApproval(currentSessions: Session[]): Session[] {
   const sessionsAwaitingApproval: Session[] = [];
   for (const session of currentSessions) {
     const prevState = previousSessionStates.get(session.name);
+    if (prevState?.isTerminated) {
+      continue; // Skip terminated sessions
+    }
     if (
       session.rawState === "AWAITING_PLAN_APPROVAL" &&
       (!prevState || prevState.rawState !== "AWAITING_PLAN_APPROVAL")
@@ -276,11 +283,45 @@ async function updatePreviousStates(
   context: vscode.ExtensionContext
 ): Promise<void> {
   for (const session of currentSessions) {
+    const prevState = previousSessionStates.get(session.name);
+
+    // If already terminated, we don't need to check again.
+    // Just update with the latest info from the server but keep it terminated.
+    if (prevState?.isTerminated) {
+      previousSessionStates.set(session.name, {
+        ...prevState,
+        state: session.state,
+        rawState: session.rawState,
+        outputs: session.outputs,
+      });
+      continue;
+    }
+
+    let isTerminated = false;
+    if (session.state === "COMPLETED") {
+      const prUrl = extractPRUrl(session);
+      if (prUrl) {
+        const isClosed = await checkPRStatus(prUrl, context);
+        if (isClosed) {
+          isTerminated = true;
+          console.log(
+            `Jules: Session ${session.name} is now terminated because its PR is closed.`
+          );
+        }
+      }
+    } else if (session.state === "FAILED" || session.state === "CANCELLED") {
+      isTerminated = true;
+      console.log(
+        `Jules: Session ${session.name} is now terminated due to its state: ${session.state}.`
+      );
+    }
+
     previousSessionStates.set(session.name, {
       name: session.name,
       state: session.state,
       rawState: session.rawState,
       outputs: session.outputs,
+      isTerminated: isTerminated,
     });
   }
 
@@ -753,38 +794,18 @@ class JulesSessionsProvider
       .get<boolean>("hideClosedPRSessions", true);
 
     if (hideClosedPRs) {
-      const sessionsToCheck = filteredSessions.filter(
-        (session) => session.state === "COMPLETED" && extractPRUrl(session)
-      );
-
-      // Check PR statuses in parallel
-      const prStatusChecks = await Promise.all(
-        sessionsToCheck.map(async (session) => {
-          const prUrl = extractPRUrl(session);
-          if (!prUrl) {
-            return { session, isClosed: false };
-          }
-          const isClosed = await checkPRStatus(prUrl, this.context);
-          return { session, isClosed };
-        })
-      );
-
-      // Create a set of sessions with closed PRs
-      const closedPRSessionNames = new Set(
-        prStatusChecks
-          .filter((result) => result.isClosed)
-          .map((result) => result.session.name)
-      );
-
-      // Filter out sessions with closed PRs
+      // We no longer need to check PR status on every render.
+      // The `isTerminated` flag in `previousSessionStates` handles this.
       const beforeFilterCount = filteredSessions.length;
-      filteredSessions = filteredSessions.filter(
-        (session) => !closedPRSessionNames.has(session.name)
-      );
-
-      if (closedPRSessionNames.size > 0) {
+      filteredSessions = filteredSessions.filter((session) => {
+        const prevState = previousSessionStates.get(session.name);
+        // Hide if the session is marked as terminated.
+        return !prevState?.isTerminated;
+      });
+      const filteredCount = beforeFilterCount - filteredSessions.length;
+      if (filteredCount > 0) {
         console.log(
-          `Jules: Filtered out ${closedPRSessionNames.size} sessions with closed PRs (${beforeFilterCount} -> ${filteredSessions.length})`
+          `Jules: Filtered out ${filteredCount} terminated sessions (${beforeFilterCount} -> ${filteredSessions.length})`
         );
       }
     }
