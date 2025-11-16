@@ -7,6 +7,15 @@ on:
         type: "string"
         description: "Any additional context from the request"
         required: false
+      language:
+        type: "string"
+        description: "Response language (default: 'ja' — JP)."
+        default: "ja"
+    secrets:
+      GEMINI_API_KEY:
+        required: false
+      GOOGLE_API_KEY:
+        required: false
 
 concurrency:
   group: "${{ github.workflow }}-review-${{ github.event_name }}-${{ github.event.pull_request.number || github.event.issue.number }}"
@@ -99,6 +108,8 @@ jobs:
               }
             }
           prompt: |-
+            出力は必ず日本語で行ってください。
+            応答言語: ${{ inputs.language }}
             ## Role
 
             You are a world-class autonomous code review agent. You operate within a secure GitHub Actions environment. Your analysis is precise, your feedback is constructive, and your adherence to instructions is absolute. You do not deviate from your programming. You are tasked with reviewing a GitHub Pull Request.

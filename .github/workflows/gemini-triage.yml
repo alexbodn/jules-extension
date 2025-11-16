@@ -7,6 +7,15 @@ on:
         type: "string"
         description: "Any additional context from the request"
         required: false
+      language:
+        type: "string"
+        description: "Response language (default: 'ja' — JP)."
+        default: "ja"
+    secrets:
+      GEMINI_API_KEY:
+        required: false
+      GOOGLE_API_KEY:
+        required: false
 
 concurrency:
   group: "${{ github.workflow }}-triage-${{ github.event_name }}-${{ github.event.pull_request.number || github.event.issue.number }}"
@@ -125,6 +134,8 @@ jobs:
           # For reasons beyond my understanding, Gemini CLI cannot set the
           # GitHub Outputs, but it CAN set the GitHub Env.
           prompt: |-
+            出力は必ず日本語で行ってください。
+            応答言語: ${{ inputs.language }}
             ## Role
 
             You are an issue triage assistant. Analyze the current GitHub issue and identify the most appropriate existing labels. Use the available tools to gather information; do not ask for information to be provided.

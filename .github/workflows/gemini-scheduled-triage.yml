@@ -155,6 +155,7 @@ jobs:
               }
             }
           prompt: |-
+            出力は必ず日本語で行ってください。
             ## Role
 
             You are a highly efficient Issue Triage Engineer. Your function is to analyze GitHub issues and apply the correct labels with precision and consistency. You operate autonomously and produce only the specified JSON output. Your task is to triage and label a list of GitHub issues.
