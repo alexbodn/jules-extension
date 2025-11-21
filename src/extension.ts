@@ -35,6 +35,7 @@ interface CreateSessionRequest {
   };
   automationMode: "AUTO_CREATE_PR" | "MANUAL";
   title: string;
+  requirePlanApproval?: boolean;
 }
 
 interface SessionResponse {
@@ -59,7 +60,7 @@ interface Session {
   sourceContext?: {
     source: string;
   };
-  // Add other fields if needed
+  requirePlanApproval?: boolean; // ⭐ NEW
 }
 
 export function mapApiStateToSessionState(
@@ -431,11 +432,13 @@ interface ComposerOptions {
   placeholder?: string;
   value?: string;
   showCreatePrCheckbox?: boolean;
+  showRequireApprovalCheckbox?: boolean;
 }
 
 interface ComposerResult {
   prompt: string;
   createPR: boolean;
+  requireApproval: boolean;
 }
 
 async function showMessageComposer(
@@ -472,6 +475,7 @@ async function showMessageComposer(
         finalize({
           prompt: typeof message.value === "string" ? message.value : "",
           createPR: !!message.createPR,
+          requireApproval: !!message.requireApproval,
         });
         panel.dispose();
       } else if (message?.type === "cancel") {
@@ -495,6 +499,14 @@ function getComposerHtml(
     <div class="create-pr-container">
       <input type="checkbox" id="create-pr" checked />
       <label for="create-pr">Create PR automatically?</label>
+    </div>
+  `
+    : "";
+  const requireApprovalCheckbox = options.showRequireApprovalCheckbox
+    ? `
+    <div class="require-approval-container">
+      <input type="checkbox" id="require-approval" />
+      <label for="require-approval">Require plan approval before execution?</label>
     </div>
   `
     : "";
@@ -576,6 +588,7 @@ function getComposerHtml(
   <textarea id="message" placeholder="${placeholder}" autofocus>${value}</textarea>
   <div class="actions">
     ${createPrCheckbox}
+    ${requireApprovalCheckbox}
     <button type="button" id="cancel">Cancel</button>
     <button type="button" id="submit" class="primary">Send</button>
   </div>
@@ -583,11 +596,13 @@ function getComposerHtml(
     const vscode = acquireVsCodeApi();
     const textarea = document.getElementById('message');
     const createPrCheckbox = document.getElementById('create-pr');
+    const requireApprovalCheckbox = document.getElementById('require-approval');
     const submit = () => {
       vscode.postMessage({
         type: 'submit',
         value: textarea.value,
         createPR: createPrCheckbox ? createPrCheckbox.checked : false,
+        requireApproval: requireApprovalCheckbox ? requireApprovalCheckbox.checked : false,
       });
     };
 
@@ -868,9 +883,9 @@ class JulesSessionsProvider
 export class SessionTreeItem extends vscode.TreeItem {
   constructor(public readonly session: Session) {
     super(session.title || session.name, vscode.TreeItemCollapsibleState.None);
-    this.tooltip = `${session.name} - ${session.state}`;
+    this.tooltip = `${session.name} - ${session.state}${session.requirePlanApproval ? ' (Plan Approval Required)' : ''}`;
     this.description = session.state;
-    this.iconPath = this.getIcon(session.state);
+    this.iconPath = this.getIcon(session.state, session.rawState);
     this.contextValue = "jules-session";
     this.command = {
       command: "jules-extension.showActivities",
@@ -879,7 +894,10 @@ export class SessionTreeItem extends vscode.TreeItem {
     };
   }
 
-  private getIcon(state: string): vscode.ThemeIcon {
+  private getIcon(state: string, rawState?: string): vscode.ThemeIcon {
+    if (rawState === "AWAITING_PLAN_APPROVAL") {
+      return new vscode.ThemeIcon("clock");
+    }
     switch (state) {
       case "RUNNING":
         return new vscode.ThemeIcon("sync~spin");
@@ -1302,6 +1320,7 @@ export function activate(context: vscode.ExtensionContext) {
           title: "Create Jules Session",
           placeholder: "Describe the task you want Jules to tackle...",
           showCreatePrCheckbox: true,
+          showRequireApprovalCheckbox: true,
         });
 
         if (result === undefined) {
@@ -1329,6 +1348,7 @@ export function activate(context: vscode.ExtensionContext) {
           },
           automationMode,
           title,
+          requirePlanApproval: result.requireApproval,
         };
 
         await vscode.window.withProgress(
