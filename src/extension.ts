@@ -1168,9 +1168,7 @@ export function activate(context: vscode.ExtensionContext) {
           logChannel.appendLine(`[Jules] Warning: Branch "${startingBranch}" not found on remote`);
 
           const action = await vscode.window.showWarningMessage(
-            `Branch "${startingBranch}" exists locally but has not been pushed to remote.\n\n` +
-            `Jules requires a remote branch to start a session.\n` +
-            `You can push this branch first, or use the default branch "${selectedDefaultBranch}" instead.`,
+            `Branch "${startingBranch}" exists locally but has not been pushed to remote.\n\nJules requires a remote branch to start a session.\nYou can push this branch first, or use the default branch "${selectedDefaultBranch}" instead.`,
             { modal: true },
             'Use Default Branch',
             'Cancel'
