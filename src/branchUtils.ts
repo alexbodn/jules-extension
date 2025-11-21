@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { JulesApiClient } from './julesApiClient';
 import { Source as SourceType } from './types';
+import { BranchesCache, isCacheValid } from './cache';
 
 const DEFAULT_FALLBACK_BRANCH = 'main';
 
@@ -70,19 +71,41 @@ export async function getCurrentBranch(outputChannel: vscode.OutputChannel): Pro
  * @param selectedSource 選択されたソース
  * @param apiClient APIクライアント
  * @param outputChannel ログ出力チャンネル
+ * @param context VS Code拡張コンテキスト
  * @returns ブランチリスト、デフォルトブランチ、現在のブランチ、リモートブランチ
  */
 export async function getBranchesForSession(
     selectedSource: SourceType,
     apiClient: JulesApiClient,
-    outputChannel: vscode.OutputChannel
+    outputChannel: vscode.OutputChannel,
+    context: vscode.ExtensionContext
 ): Promise<{ branches: string[]; defaultBranch: string; currentBranch: string | null; remoteBranches: string[] }> {
+    const cacheKey = `jules.branches.${selectedSource.id}`;
+    const cached = context.globalState.get<BranchesCache>(cacheKey);
+
+    if (cached && isCacheValid(cached.timestamp)) {
+        outputChannel.appendLine('Using cached branches');
+        return {
+            branches: cached.branches,
+            defaultBranch: cached.defaultBranch,
+            currentBranch: cached.currentBranch,
+            remoteBranches: cached.remoteBranches
+        };
+    }
+
     let branches: string[] = [];
     let defaultBranch = DEFAULT_FALLBACK_BRANCH;
     let remoteBranches: string[] = [];
 
     try {
-        const sourceDetail = await apiClient.getSource(selectedSource.name!);
+        const sourceDetail = await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: 'Fetching branches...',
+            cancellable: false
+        }, async (progress) => {
+            return await apiClient.getSource(selectedSource.name!);
+        });
+
         if (sourceDetail.githubRepo?.branches) {
             remoteBranches = sourceDetail.githubRepo.branches.map(b => b.displayName);
             branches = [...remoteBranches];  // リモートブランチをベースに
@@ -113,5 +136,8 @@ export async function getBranchesForSession(
         branches.unshift(currentBranch);
     }
 
-    return { branches, defaultBranch: selectedDefaultBranch, currentBranch, remoteBranches };
+    const result = { branches, defaultBranch: selectedDefaultBranch, currentBranch, remoteBranches };
+    context.globalState.update(cacheKey, { ...result, timestamp: Date.now() });
+    outputChannel.appendLine(`Fetched ${branches.length} branches`);
+    return result;
 }

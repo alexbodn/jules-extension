@@ -161,6 +161,12 @@
         "title": "Set GitHub Personal Access Token",
         "category": "Jules",
         "icon": "$(github)"
+      },
+      {
+        "command": "jules-extension.clearCache",
+        "title": "Clear Jules Cache",
+        "category": "Jules",
+        "icon": "$(clear-all)"
       }
     ],
     "views": {
