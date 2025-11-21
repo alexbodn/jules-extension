@@ -18,11 +18,10 @@ export const CACHE_TTL_MINUTES = 5;
 /**
  * キャッシュが有効かどうかをチェックする
  * @param timestamp キャッシュのタイムスタンプ
- * @param ttlMinutes TTL（分）
+ * @param ttlMs TTL（ミリ秒）
  * @returns 有効ならtrue
  */
-export function isCacheValid(timestamp: number, ttlMinutes: number = CACHE_TTL_MINUTES): boolean {
+export function isCacheValid(timestamp: number, ttlMs: number = CACHE_TTL_MINUTES * 60 * 1000): boolean {
     const now = Date.now();
-    const ttlMs = ttlMinutes * 60 * 1000;
     return (now - timestamp) < ttlMs;
 }

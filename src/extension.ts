@@ -1123,20 +1123,20 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      const cacheKey = 'jules.sources';
-      const cached = context.globalState.get<SourcesCache>(cacheKey);
-      let sources: SourceType[];
+      try {
+        const cacheKey = 'jules.sources';
+        const cached = context.globalState.get<SourcesCache>(cacheKey);
+        let sources: SourceType[];
 
-      if (cached && isCacheValid(cached.timestamp)) {
-        logChannel.appendLine('Using cached sources');
-        sources = cached.sources;
-      } else {
-        sources = await vscode.window.withProgress({
-          location: vscode.ProgressLocation.Notification,
-          title: 'Fetching sources...',
-          cancellable: false
-        }, async (progress) => {
-          try {
+        if (cached && isCacheValid(cached.timestamp)) {
+          logChannel.appendLine('Using cached sources');
+          sources = cached.sources;
+        } else {
+          sources = await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: 'Fetching sources...',
+            cancellable: false
+          }, async (progress) => {
             const response = await fetch(`${JULES_API_BASE_URL}/sources`, {
               method: "GET",
               headers: {
@@ -1151,43 +1151,34 @@ export function activate(context: vscode.ExtensionContext) {
             if (!data.sources || !Array.isArray(data.sources)) {
               throw new Error("Invalid response format from API.");
             }
-            context.globalState.update(cacheKey, { sources: data.sources, timestamp: Date.now() });
+            await context.globalState.update(cacheKey, { sources: data.sources, timestamp: Date.now() });
             logChannel.appendLine(`Fetched ${data.sources.length} sources`);
             return data.sources;
-          } catch (error) {
-            logChannel.appendLine(`Failed to fetch sources: ${error}`);
-            throw error;
-          }
-        });
-      }
-            logChannel.appendLine(`Failed to fetch sources: ${error}`);
-            vscode.window.showErrorMessage(
-              "Failed to fetch sources. Please check your internet connection."
-            );
-            return [];
-          }
-        });
+          });
+        }
 
-      }
-
-      const items: SourceQuickPickItem[] = sources.map((source) => ({
-      const items: SourceQuickPickItem[] = sources.map((source) => ({
-        label: source.name || source.id || "Unknown",
-        description: source.url || "",
-        detail: source.description || "",
-        source: source,
-      }));
-      const selected: SourceQuickPickItem | undefined =
-        await vscode.window.showQuickPick(items, {
-          placeHolder: "Select a Jules Source",
-        });
-      if (selected) {
-        await context.globalState.update("selected-source", selected.source);
-        vscode.window.showInformationMessage(
-          `Selected source: ${selected.label}`
-        );
-        updateStatusBar(context, statusBarItem);
-        sessionsProvider.refresh();
+        const items: SourceQuickPickItem[] = sources.map((source) => ({
+          label: source.name || source.id || "Unknown",
+          description: source.url || "",
+          detail: source.description || "",
+          source: source,
+        }));
+        const selected: SourceQuickPickItem | undefined =
+          await vscode.window.showQuickPick(items, {
+            placeHolder: "Select a Jules Source",
+          });
+        if (selected) {
+          await context.globalState.update("selected-source", selected.source);
+          vscode.window.showInformationMessage(
+            `Selected source: ${selected.label}`
+          );
+          updateStatusBar(context, statusBarItem);
+          sessionsProvider.refresh();
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error occurred.";
+        logChannel.appendLine(`Failed to list sources: ${message}`);
+        vscode.window.showErrorMessage(`Failed to list sources: ${message}`);
       }
     }
   );
@@ -1694,14 +1685,11 @@ export function activate(context: vscode.ExtensionContext) {
   const clearCacheDisposable = vscode.commands.registerCommand(
     "jules-extension.clearCache",
     async () => {
-      const keys = context.globalState.keys();
-      const cacheKeys = keys.filter(key => key.startsWith('jules.sources') || key.startsWith('jules.branches.'));
-      cacheKeys.forEach(key => {
-        context.globalState.update(key, undefined);
-        logChannel.appendLine(`Cleared cache: ${key}`);
-      });
-      logChannel.appendLine(`Total cleared: ${cacheKeys.length} cache entries`);
-      vscode.window.showInformationMessage(`Cache cleared: ${cacheKeys.length} entries removed`);
+      const cacheKeys = ['jules.sources', 'jules.branches'];
+      await Promise.all(
+        cacheKeys.map(key => context.globalState.update(key, undefined))
+      );
+      vscode.window.showInformationMessage("Cache cleared successfully.");
     }
   );
 
