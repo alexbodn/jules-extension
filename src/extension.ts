@@ -4,6 +4,7 @@ import * as vscode from "vscode";
 import { JulesApiClient } from './julesApiClient';
 import { GitHubBranch, GitHubRepo, Source as SourceType, SourcesResponse } from './types';
 import { getBranchesForSession } from './branchUtils';
+import { parseGitHubUrl, createRemoteBranch } from "./githubUtils";
 
 // Constants
 const JULES_API_BASE_URL = "https://jules.googleapis.com/v1alpha";
@@ -118,6 +119,28 @@ async function getStoredApiKey(
     return undefined;
   }
   return apiKey;
+}
+
+async function getGitHubUrl(): Promise<string | undefined> {
+  try {
+    const gitExtension = vscode.extensions.getExtension('vscode.git');
+    if (!gitExtension) {
+      throw new Error('Git extension not found');
+    }
+    const git = gitExtension.exports.getAPI(1);
+    const repository = git.repositories[0];
+    if (!repository) {
+      throw new Error('No Git repository found');
+    }
+    const remote = repository.state.remotes.find((r: any) => r.name === 'origin');
+    if (!remote) {
+      throw new Error('No origin remote found');
+    }
+    return remote.fetchUrl || remote.pushUrl;
+  } catch (error) {
+    console.error('Failed to get GitHub URL:', error);
+    return undefined;
+  }
 }
 
 export function buildFinalPrompt(userPrompt: string): string {
@@ -1168,13 +1191,57 @@ export function activate(context: vscode.ExtensionContext) {
           logChannel.appendLine(`[Jules] Warning: Branch "${startingBranch}" not found on remote`);
 
           const action = await vscode.window.showWarningMessage(
-            `Branch "${startingBranch}" exists locally but has not been pushed to remote.\n\nJules requires a remote branch to start a session.\nYou can push this branch first, or use the default branch "${selectedDefaultBranch}" instead.`,
+            `Branch "${startingBranch}" exists locally but has not been pushed to remote.\n\nJules requires a remote branch to start a session.`,
             { modal: true },
+            'Create Remote Branch',
             'Use Default Branch',
             'Cancel'
           );
 
-          if (action === 'Use Default Branch') {
+          if (action === 'Create Remote Branch') {
+            // PATを取得
+            const pat = await context.secrets.get("jules-github-pat");
+            if (!pat) {
+              vscode.window.showErrorMessage("GitHub PAT is not set. Please run 'Jules: Set GitHub PAT' command first.");
+              return;
+            }
+
+            // GitHub URLを解析
+            const gitHubUrl = await getGitHubUrl();
+            if (!gitHubUrl) {
+              vscode.window.showErrorMessage("Unable to determine GitHub repository URL.");
+              return;
+            }
+
+            const repoInfo = parseGitHubUrl(gitHubUrl);
+            if (!repoInfo) {
+              vscode.window.showErrorMessage("Invalid GitHub repository URL.");
+              return;
+            }
+
+            // リモートブランチを作成
+            try {
+              await vscode.window.withProgress(
+                {
+                  location: vscode.ProgressLocation.Notification,
+                  title: "Creating remote branch...",
+                  cancellable: false,
+                },
+                async (progress) => {
+                  progress.report({ increment: 0, message: "Initializing..." });
+                  await createRemoteBranch(pat, repoInfo.owner, repoInfo.repo, startingBranch);
+                  progress.report({ increment: 100, message: "Remote branch created!" });
+                }
+              );
+              logChannel.appendLine(`[Jules] Remote branch "${startingBranch}" created successfully`);
+              vscode.window.showInformationMessage(`Remote branch "${startingBranch}" created successfully.`);
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : "Unknown error";
+              logChannel.appendLine(`[Jules] Failed to create remote branch: ${errorMessage}`);
+              vscode.window.showErrorMessage(`Failed to create remote branch: ${errorMessage}`);
+              return;
+            }
+          } else if (action === 'Use Default Branch') {
             startingBranch = selectedDefaultBranch;
             logChannel.appendLine(`[Jules] Using default branch: ${selectedDefaultBranch}`);
           } else {
@@ -1522,6 +1589,52 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showErrorMessage(
           `GitHub Token の保存に失敗しました: ${error instanceof Error ? error.message : "Unknown error"
           }`
+        );
+      }
+    }
+  );
+
+  const setGitHubPatDisposable = vscode.commands.registerCommand(
+    "jules-extension.setGitHubPat",
+    async () => {
+      try {
+        const token = await vscode.window.showInputBox({
+          prompt: "Enter your GitHub Personal Access Token for automatic branch pushing",
+          password: true,
+          placeHolder: "ghp_xxxxxxxxxxxxxxxxxxxx",
+          ignoreFocusOut: true,
+        });
+
+        if (token === undefined) {
+          // User cancelled the input
+          console.log("Jules: GitHub PAT input cancelled by user");
+          return;
+        }
+
+        if (token === "") {
+          vscode.window.showWarningMessage("GitHub PAT is required. Cancelled.");
+          return;
+        }
+
+        // Validate token format
+        if (!token.startsWith("ghp_") && !token.startsWith("github_pat_")) {
+          const proceed = await vscode.window.showWarningMessage(
+            "The entered token doesn't appear to be a GitHub token format. Save anyway?",
+            { modal: true },
+            "Save",
+            "Cancel"
+          );
+          if (proceed !== "Save") {
+            return;
+          }
+        }
+
+        await context.secrets.store("jules-github-pat", token);
+        vscode.window.showInformationMessage("GitHub PAT saved securely.");
+      } catch (error) {
+        console.error("Jules: Error setting GitHub PAT:", error);
+        vscode.window.showErrorMessage(
+          `Failed to save GitHub PAT: ${error instanceof Error ? error.message : "Unknown error"}`
         );
       }
     }

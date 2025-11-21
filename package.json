@@ -154,6 +154,12 @@
         "title": "Set GitHub Token (for PR Status)",
         "category": "Jules",
         "icon": "$(github)"
+      },
+      {
+        "command": "jules-extension.setGitHubPat",
+        "title": "Set GitHub Personal Access Token",
+        "category": "Jules",
+        "icon": "$(github)"
       }
     ],
     "views": {
@@ -238,6 +244,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@octokit/rest": "^22.0.1",
     "is-glob": "^4.0.3"
   }
 }
