@@ -5,6 +5,7 @@ import { JulesApiClient } from './julesApiClient';
 import { GitHubBranch, GitHubRepo, Source as SourceType, SourcesResponse } from './types';
 import { getBranchesForSession } from './branchUtils';
 import { parseGitHubUrl, createRemoteBranch } from "./githubUtils";
+import { SourcesCache, isCacheValid } from './cache';
 
 // Constants
 const JULES_API_BASE_URL = "https://jules.googleapis.com/v1alpha";
@@ -1121,26 +1122,42 @@ export function activate(context: vscode.ExtensionContext) {
       if (!apiKey) {
         return;
       }
+
       try {
-        const response = await fetch(`${JULES_API_BASE_URL}/sources`, {
-          method: "GET",
-          headers: {
-            "X-Goog-Api-Key": apiKey,
-            "Content-Type": "application/json",
-          },
-        });
-        if (!response.ok) {
-          vscode.window.showErrorMessage(
-            `Failed to fetch sources: ${response.status} ${response.statusText}`
-          );
-          return;
+        const cacheKey = 'jules.sources';
+        const cached = context.globalState.get<SourcesCache>(cacheKey);
+        let sources: SourceType[];
+
+        if (cached && isCacheValid(cached.timestamp)) {
+          logChannel.appendLine('Using cached sources');
+          sources = cached.sources;
+        } else {
+          sources = await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: 'Fetching sources...',
+            cancellable: false
+          }, async (progress) => {
+            const response = await fetch(`${JULES_API_BASE_URL}/sources`, {
+              method: "GET",
+              headers: {
+                "X-Goog-Api-Key": apiKey,
+                "Content-Type": "application/json",
+              },
+            });
+            if (!response.ok) {
+              throw new Error(`Failed to fetch sources: ${response.status} ${response.statusText}`);
+            }
+            const data = (await response.json()) as SourcesResponse;
+            if (!data.sources || !Array.isArray(data.sources)) {
+              throw new Error("Invalid response format from API.");
+            }
+            await context.globalState.update(cacheKey, { sources: data.sources, timestamp: Date.now() });
+            logChannel.appendLine(`Fetched ${data.sources.length} sources`);
+            return data.sources;
+          });
         }
-        const data = (await response.json()) as SourcesResponse;
-        if (!data.sources || !Array.isArray(data.sources)) {
-          vscode.window.showErrorMessage("Invalid response format from API.");
-          return;
-        }
-        const items: SourceQuickPickItem[] = data.sources.map((source) => ({
+
+        const items: SourceQuickPickItem[] = sources.map((source) => ({
           label: source.name || source.id || "Unknown",
           description: source.url || "",
           detail: source.description || "",
@@ -1159,9 +1176,9 @@ export function activate(context: vscode.ExtensionContext) {
           sessionsProvider.refresh();
         }
       } catch (error) {
-        vscode.window.showErrorMessage(
-          "Failed to fetch sources. Please check your internet connection."
-        );
+        const message = error instanceof Error ? error.message : "Unknown error occurred.";
+        logChannel.appendLine(`Failed to list sources: ${message}`);
+        vscode.window.showErrorMessage(`Failed to list sources: ${message}`);
       }
     }
   );
@@ -1190,7 +1207,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       try {
         // ブランチ選択ロジック（メッセージ入力前に移動）
-        const { branches, defaultBranch: selectedDefaultBranch, currentBranch, remoteBranches } = await getBranchesForSession(selectedSource, apiClient, logChannel);
+        const { branches, defaultBranch: selectedDefaultBranch, currentBranch, remoteBranches } = await getBranchesForSession(selectedSource, apiClient, logChannel, context);
 
         // QuickPickでブランチ選択
         const selectedBranch = await vscode.window.showQuickPick(
@@ -1256,6 +1273,14 @@ export function activate(context: vscode.ExtensionContext) {
               );
               logChannel.appendLine(`[Jules] Remote branch "${startingBranch}" created successfully`);
               vscode.window.showInformationMessage(`Remote branch "${startingBranch}" created successfully.`);
+
+              // Force refresh branches cache after remote branch creation
+              try {
+                await getBranchesForSession(selectedSource, apiClient, logChannel, context, true);
+                logChannel.appendLine('[Jules] Branches cache refreshed after remote branch creation');
+              } catch (error) {
+                logChannel.appendLine(`[Jules] Failed to refresh branches cache: ${error}`);
+              }
             } catch (error) {
               const errorMessage = error instanceof Error ? error.message : "Unknown error";
               logChannel.appendLine(`[Jules] Failed to create remote branch: ${errorMessage}`);
@@ -1657,6 +1682,31 @@ export function activate(context: vscode.ExtensionContext) {
     }
   );
 
+  const clearCacheDisposable = vscode.commands.registerCommand(
+    "jules-extension.clearCache",
+    async () => {
+      try {
+        // すべてのキーを取得
+        const allKeys = context.globalState.keys();
+
+        // Sources & Branches キャッシュをフィルタ
+        const branchCacheKeys = allKeys.filter(key => key.startsWith('jules.branches.'));
+        const cacheKeys = ['jules.sources', ...branchCacheKeys];
+
+        // すべてのキャッシュをクリア
+        await Promise.all(
+          cacheKeys.map(key => context.globalState.update(key, undefined))
+        );
+
+        vscode.window.showInformationMessage(`Jules cache cleared: ${cacheKeys.length} entries removed`);
+        logChannel.appendLine(`[Jules] Cache cleared: ${cacheKeys.length} entries (1 sources + ${branchCacheKeys.length} branches)`);
+      } catch (error: any) {
+        logChannel.appendLine(`[Jules] Error clearing cache: ${error.message}`);
+        vscode.window.showErrorMessage(`Failed to clear cache: ${error.message}`);
+      }
+    }
+  );
+
   context.subscriptions.push(
     setApiKeyDisposable,
     verifyApiKeyDisposable,
@@ -1670,7 +1720,9 @@ export function activate(context: vscode.ExtensionContext) {
     approvePlanDisposable,
     openSettingsDisposable,
     deleteSessionDisposable,
-    setGithubTokenDisposable
+    setGithubTokenDisposable,
+    setGitHubPatDisposable,
+    clearCacheDisposable
   );
 }
 
