@@ -190,13 +190,13 @@ async function getRepoInfoForBranchCreation(outputChannel?: vscode.OutputChannel
     const remoteUrl = stdout.trim();
     logger.appendLine(`[Jules] Remote URL: ${remoteUrl}`);
 
-    const match = remoteUrl.match(/github\.com[:/]([^/]+)\/([^/.]+)/);
-    if (!match) {
+    // Prefer the shared parser which handles https/ssh and .git suffixes
+    const repoInfo = parseGitHubUrl(remoteUrl);
+    if (!repoInfo) {
       vscode.window.showErrorMessage('Could not parse GitHub repository URL');
       return null;
     }
-
-    const [, owner, repo] = match;
+    const { owner, repo } = repoInfo;
     logger.appendLine(`[Jules] Repository: ${owner}/${repo}`);
 
     return { token, owner, repo };
@@ -211,8 +211,8 @@ async function createRemoteBranch(
   token: string,
   owner: string,
   repo: string,
-  branchName: string
-  , outputChannel?: vscode.OutputChannel
+  branchName: string,
+  outputChannel?: vscode.OutputChannel
 ): Promise<void> {
   const logger = outputChannel ?? { appendLine: (s: string) => console.log(s) } as vscode.OutputChannel;
   try {
@@ -244,13 +244,21 @@ async function createRemoteBranch(
     );
 
     if (!response.ok) {
-      const error = await response.json();
-      logger.appendLine(`[Jules] GitHub API error: ${JSON.stringify(error)}`);
-      throw new Error(`GitHub API error: ${response.status} - ${error.message || 'Unknown error'}`);
+      // Read the response as text so we can handle non-JSON errors robustly
+      const respText = await response.text();
+      logger.appendLine(`[Jules] GitHub API error response: ${respText}`);
+      let errMsg = 'Unknown error';
+      try {
+        const parsed = JSON.parse(respText);
+        errMsg = parsed?.message || JSON.stringify(parsed);
+      } catch (e) {
+        errMsg = respText;
+      }
+      throw new Error(`GitHub API error: ${response.status} - ${errMsg}`);
     }
 
-    const result = await response.json();
-    logger.appendLine(`[Jules] Remote branch created: ${result.ref}`);
+    const result: any = await response.json().catch(() => null);
+    logger.appendLine(`[Jules] Remote branch created: ${result?.ref ?? 'unknown'}`);
   } catch (error: any) {
     logger.appendLine(`[Jules] Failed to create remote branch: ${error.message}`);
     throw error;

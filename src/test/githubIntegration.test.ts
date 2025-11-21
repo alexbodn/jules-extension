@@ -37,8 +37,7 @@ suite('GitHub Integration Tests', () => {
         showWarningMessageStub.resolves('Create Remote Branch');
 
         // User sees sign-in prompt and chooses Sign In
-        const infoStub = sandbox.stub(vscode.window, 'showInformationMessage');
-        infoStub.resolves('Sign In');
+        showInformationMessageStub.resolves('Sign In' as any);
 
         // ロジックシミュレーション
         const remoteBranches = ['main', 'develop'];
@@ -70,9 +69,9 @@ suite('GitHub Integration Tests', () => {
 
         // 検証
         assert.strictEqual(showWarningMessageStub.called, true);
-        assert.strictEqual(infoStub.called, true);
+        assert.strictEqual(showInformationMessageStub.called, true);
 
-        const infoMessage = infoStub.getCall(0).args[0];
+        const infoMessage = showInformationMessageStub.getCall(0).args[0];
         assert.ok(infoMessage.includes('Sign in to GitHub'));
     });
 
@@ -80,8 +79,7 @@ suite('GitHub Integration Tests', () => {
         // No OAuth token / PAT available
         showWarningMessageStub.resolves('Create Remote Branch');
 
-        const infoStub = sandbox.stub(vscode.window, 'showInformationMessage');
-        infoStub.resolves('Cancel');
+        showInformationMessageStub.resolves('Cancel' as any);
 
         // ロジックシミュレーション
         const remoteBranches = ['main', 'develop'];
@@ -113,7 +111,7 @@ suite('GitHub Integration Tests', () => {
 
         // 検証
         assert.strictEqual(sessionCreated, false);
-        assert.strictEqual(infoStub.called, true);
+        assert.strictEqual(showInformationMessageStub.called, true);
     });
 
     test('Should proceed with branch creation when PAT is set', async () => {

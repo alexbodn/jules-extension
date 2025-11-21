@@ -126,8 +126,9 @@ export async function getBranchesForSession(
                     branches = [...remoteBranches];
                     defaultBranch = sourceDetail.githubRepo.defaultBranch?.displayName || DEFAULT_FALLBACK_BRANCH;
                 }
-            } catch (error: any) {
-                outputChannel.appendLine(`[Jules] Failed to get branches: ${error.message}`);
+            } catch (error: unknown) {
+                const msg = error instanceof Error ? error.message : String(error);
+                outputChannel.appendLine(`[Jules] Failed to get branches: ${msg}`);
                 branches = [defaultBranch];
             }
 
