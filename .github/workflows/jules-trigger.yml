@@ -66,7 +66,7 @@ jobs:
                   body: JSON.stringify({
                     prompt: prompt,
                     sourceContext: {
-                      source: `sources/${context.repo.owner}/${context.repo.repo}`,
+                      source: `sources/github/${context.repo.owner}/${context.repo.repo}`,
                       githubRepoContext: {
                         startingBranch: context.payload.repository.default_branch
                       }
