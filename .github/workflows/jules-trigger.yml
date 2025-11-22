@@ -1,0 +1,101 @@
+name: Jules Trigger
+
+on:
+  issues:
+    types: [opened, edited]
+  issue_comment:
+    types: [created]
+
+jobs:
+  jules-trigger:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    if: github.event.issue.user.login == github.repository_owner
+    steps:
+      - name: Check for @Jules mention and trigger Jules
+        uses: actions/github-script@v6
+        env:
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const JULES_SUCCESS_COMMENT = '🤖 **Jules AI Agent が起動しました**';
+            const issueNumber = context.payload.issue.number;
+
+            // Fetch the full issue to avoid a truncated body from the event payload
+            const { data: issue } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+            });
+
+            const issueBody = issue.body || '';
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+            });
+
+            const hasJulesComment = comments.some(comment => comment.body.includes(JULES_SUCCESS_COMMENT));
+            if (hasJulesComment) {
+              console.log('Jules has already been triggered for this issue.');
+              return;
+            }
+
+            const allCommentsText = comments.map(comment => comment.body).join('\\n');
+            const combinedText = issueBody + '\\n' + allCommentsText;
+
+            if (combinedText.includes('@Jules')) {
+              let prompt = `Issue Title: ${issue.title}\\n\\nIssue Body:\\n${issueBody}\\n\\n`;
+              if (comments.length > 0) {
+                prompt += 'Comments:\\n';
+                for (const comment of comments) {
+                  prompt += `- ${comment.user.login} at ${comment.created_at}: ${comment.body}\\n`;
+                }
+              }
+
+              try {
+                const response = await fetch('https://jules.googleapis.com/v1alpha/sessions', {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${process.env.JULES_API_KEY}`,
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({
+                    prompt: prompt,
+                    sourceContext: {
+                      source: `sources/${context.repo.owner}/${context.repo.repo}`,
+                      githubRepoContext: {
+                        startingBranch: context.payload.repository.default_branch
+                      }
+                    },
+                    automationMode: 'AUTO_CREATE_PR',
+                    title: `Issue #${issue.number}: ${issue.title}`
+                  })
+                });
+
+                if (!response.ok) {
+                  const errorText = await response.text();
+                  throw new Error(`Jules API error: ${response.status} - ${errorText}`);
+                }
+
+                const session = await response.json();
+
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  body: `${JULES_SUCCESS_COMMENT}\n\nセッションURL: ${session.url}\n\nJulesがこのIssueに基づいてコードを作成し，PRを自動作成します．`
+                });
+              } catch (error) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  body: `❌ **Jules起動エラー**\n\n${error.message}`
+                });
+                throw error;
+              }
+            }
