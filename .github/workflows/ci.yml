@@ -30,16 +30,13 @@ jobs:
 
       # Lint already ran in the 'lint' job which 'test' depends on
 
-  test:
+  test-linux:
     needs: lint
-    runs-on: ${{ matrix.os }}
-
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
         node-version: [18, 20]
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -61,25 +58,91 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-vscode-test-
 
-      - name: Ensure display available (Linux only)
-        if: runner.os == 'Linux'
+      - name: Ensure display available
         run: sudo apt-get update && sudo apt-get install -y xvfb
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
-        run: npm run lint
+      - name: Compile
+        run: npm run compile
+
+      - name: Run tests
+        run: |
+          xvfb-run -a npm test
+
+  test-macos:
+    needs: lint
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [18, 20]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+
+      - name: Cache VS Code Test Downloads (.vscode-test)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.vscode-test
+            ~/.vscode
+          key: ${{ runner.os }}-vscode-test-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-vscode-test-
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Compile
         run: npm run compile
 
-      - name: Run tests (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          xvfb-run -a npm test
+      - name: Run tests
+        shell: bash
+        run: npm test
 
-      - name: Run tests (macOS & Windows)
-        if: runner.os != 'Linux'
+  test-windows:
+    needs: lint
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [18, 20]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+
+      - name: Cache VS Code Test Downloads (.vscode-test)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.vscode-test
+            ~/.vscode
+          key: ${{ runner.os }}-vscode-test-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-vscode-test-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile
+        run: npm run compile
+
+      - name: Run tests
         shell: bash
         run: npm test
