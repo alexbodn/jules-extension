@@ -9,9 +9,10 @@ permissions:
 jobs:
   reply_to_review:
     runs-on: ubuntu-latest
-    if: github.event.pull_request.user.login == 'google-labs-jules[bot]' && github.event.review
+    if: github.event.pull_request.user.login == 'google-labs-jules[bot]'
     steps:
       - name: レビューコメントへ返信
+        if: github.event.review
         uses: actions/github-script@v6
         with:
           script: |
