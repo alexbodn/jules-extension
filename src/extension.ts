@@ -584,6 +584,17 @@ function getActivityIcon(activity: Activity): string {
 
 class JulesSessionsProvider
   implements vscode.TreeDataProvider<vscode.TreeItem> {
+  private static silentOutputChannel: vscode.OutputChannel = {
+    name: 'silent-channel',
+    append: () => {},
+    appendLine: () => {},
+    replace: () => {},
+    clear: () => {},
+    show: () => {},
+    hide: () => {},
+    dispose: () => {},
+  };
+
   private _onDidChangeTreeData: vscode.EventEmitter<
     vscode.TreeItem | undefined | null | void
   > = new vscode.EventEmitter<vscode.TreeItem | undefined | null | void>();
@@ -685,28 +696,7 @@ class JulesSessionsProvider
       // --- Update the cache ---
       this.sessionsCache = allSessionsMapped;
       if (isBackground) {
-        const selectedSource = this.context.globalState.get<SourceType>("selected-source");
-        if (selectedSource) {
-          console.log(`Jules: Background refresh, updating branches for ${selectedSource.name}`);
-          try {
-            const apiClient = new JulesApiClient(apiKey, JULES_API_BASE_URL);
-            // バックグラウンド更新ではユーザーにログを見せないため、何もしないダミーのOutputChannelを使用します。
-            const silentOutputChannel: vscode.OutputChannel = {
-                name: 'silent-channel',
-                append: () => {},
-                appendLine: () => {},
-                replace: () => {},
-                clear: () => {},
-                show: () => {},
-                hide: () => {},
-                dispose: () => {},
-            };
-            await getBranchesForSession(selectedSource, apiClient, silentOutputChannel, this.context, true);
-            console.log("Jules: Branch cache updated successfully during background refresh");
-          } catch (e) {
-            console.error("Jules: Failed to update branch cache during background refresh", e);
-          }
-        }
+        this._refreshBranchCacheInBackground(apiKey);
       }
     } catch (error) {
       console.error("Jules: Error during fetchAndProcessSessions:", error);
@@ -716,6 +706,22 @@ class JulesSessionsProvider
       console.log("Jules: Finished fetching and processing sessions.");
       // Fire the event to refresh the view with the new data
       this._onDidChangeTreeData.fire();
+    }
+  }
+
+  private async _refreshBranchCacheInBackground(apiKey: string): Promise<void> {
+    const selectedSource = this.context.globalState.get<SourceType>("selected-source");
+    if (!selectedSource) {
+      return;
+    }
+
+    console.log(`Jules: Background refresh, updating branches for ${selectedSource.name}`);
+    try {
+      const apiClient = new JulesApiClient(apiKey, JULES_API_BASE_URL);
+      await getBranchesForSession(selectedSource, apiClient, JulesSessionsProvider.silentOutputChannel, this.context, true);
+      console.log("Jules: Branch cache updated successfully during background refresh");
+    } catch (e) {
+      console.error("Jules: Failed to update branch cache during background refresh", e);
     }
   }
 
