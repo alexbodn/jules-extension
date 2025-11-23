@@ -3,17 +3,20 @@ name: PR Review Feedback to Jules
 on:
   pull_request_review_comment:
     types: [created]
+  issue_comment:
+    types: [created]
 
 jobs:
   feedback-to-jules:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
+      issues: write
     steps:
       - name: Send feedback to Jules
         uses: actions/github-script@v6
         with:
-          github-token: $ secrets.GITHUB_TOKEN 
+          github-token: $ secrets.GITHUB_TOKEN
           script: |
             const prNumber = context.payload.pull_request.number;
             const prAuthor = context.payload.pull_request.user.login;
@@ -24,6 +27,12 @@ jobs:
             if (!prAuthor.toLowerCase().includes('jules')) {
               console.log('PR not created by google-labs-jules, skipping.');
               return;
+            }
+
+            // コマンド（/から始まる）や、既にJulesへのメンションがある場合は無視
+            if (reviewComment.trim().startsWith('/') || reviewComment.includes('@jules')) {
+               console.log('Skipping command or existing mention.');
+               return;
             }
 
             // Quote the review comment and add @jules
