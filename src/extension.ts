@@ -400,20 +400,14 @@ function checkForSessionsInState(
   currentSessions: Session[],
   targetState: string
 ): Session[] {
-  const sessionsInState: Session[] = [];
-  for (const session of currentSessions) {
+  return currentSessions.filter((session) => {
     const prevState = previousSessionStates.get(session.name);
-    if (prevState?.isTerminated) {
-      continue; // Skip terminated sessions
-    }
-    if (
+    return (
+      !prevState?.isTerminated &&
       session.rawState === targetState &&
       (!prevState || prevState.rawState !== targetState)
-    ) {
-      sessionsInState.push(session);
-    }
-  }
-  return sessionsInState;
+    );
+  });
 }
 
 async function notifyPRCreated(session: Session, prUrl: string): Promise<void> {
