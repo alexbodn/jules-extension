@@ -13,8 +13,9 @@ jobs:
     steps:
       - name: Send feedback to Jules
         uses: actions/github-script@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const payload = context.payload;
             // 修正: issue_commentの場合はpayload.issue.number、reviewの場合はpull_request.number
