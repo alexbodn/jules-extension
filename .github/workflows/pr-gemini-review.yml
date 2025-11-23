@@ -1,59 +1,37 @@
 name: Add Gemini Review Comment on Jules PR
 
 on:
-  push:
   pull_request:
-    types: [opened]
+    # opened: PR作成時
+    # synchronize: PRに修正コミットがPushされた時
+    types: [opened, synchronize]
 
 jobs:
   add-gemini-review:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
+      issues: write
     steps:
       - name: Add /gemini review comment
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.GH_PAT }}
           script: |
-            let prNumber;
-            let shouldComment = false;
+            // トリガーされたイベントがPR(opened/synchronize)なので、必ずpull_request情報がある
+            const pr = context.payload.pull_request;
+            const prAuthor = pr.user.login;
 
-            if (context.eventName === 'push') {
-              // Check if the commit author includes 'jules'
-              const author = context.payload.head_commit.author;
-              if (author.name.toLowerCase().includes('jules') || author.email.toLowerCase().includes('jules')) {
-                // Find the PR for this branch
-                const branch = context.payload.ref.replace('refs/heads/', '');
-                const pulls = await github.rest.pulls.list({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  head: `${context.repo.owner}:${branch}`,
-                  state: 'open'
-                });
-                if (pulls.data.length > 0) {
-                  prNumber = pulls.data[0].number;
-                  shouldComment = true;
-                }
-              }
-            } else if (context.eventName === 'pull_request') {
-              prNumber = context.payload.pull_request.number;
-              const prAuthor = context.payload.pull_request.user.login;
-              // Check if PR is created by google-labs-jules
-              if (prAuthor === 'google-labs-jules[bot]') {
-                shouldComment = true;
-              }
-            }
-
-            if (shouldComment && prNumber) {
-              // Add /gemini review comment
+            // Julesが作成したPRかどうかチェック
+            // (google-labs-jules[bot] なども含まれるようにincludes判定)
+            if (prAuthor.toLowerCase().includes('jules')) {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: prNumber,
+                issue_number: pr.number,
                 body: '/gemini review'
               });
               console.log('/gemini review comment added.');
             } else {
-              console.log('Conditions not met, skipping.');
+              console.log('Not a Jules PR, skipping.');
             }
