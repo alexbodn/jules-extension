@@ -49,8 +49,8 @@
         },
         "jules-extension.autoRefresh.enabled": {
           "type": "boolean",
-          "default": false,
-          "description": "Enable automatic refresh of sessions list"
+          "default": true,
+          "description": "Enable automatic refresh of sessions list (required for awaiting user feedback/plan approval notifications)"
         },
         "jules-extension.autoRefresh.interval": {
           "type": "number",
