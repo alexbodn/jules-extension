@@ -718,7 +718,7 @@ class JulesSessionsProvider
     console.log(`Jules: Background refresh, updating branches for ${selectedSource.name}`);
     try {
       const apiClient = new JulesApiClient(apiKey, JULES_API_BASE_URL);
-      await getBranchesForSession(selectedSource, apiClient, JulesSessionsProvider.silentOutputChannel, this.context, true);
+      await getBranchesForSession(selectedSource, apiClient, JulesSessionsProvider.silentOutputChannel, this.context, { forceRefresh: true, showProgress: false });
       console.log("Jules: Branch cache updated successfully during background refresh");
     } catch (e) {
       console.error("Jules: Failed to update branch cache during background refresh", e);
@@ -1167,7 +1167,7 @@ export function activate(context: vscode.ExtensionContext) {
       resetAutoRefresh(context, sessionsProvider);
       try {
         // ブランチ選択ロジック（メッセージ入力前に移動）
-        const { branches, defaultBranch: selectedDefaultBranch, currentBranch, remoteBranches } = await getBranchesForSession(selectedSource, apiClient, logChannel, context);
+        const { branches, defaultBranch: selectedDefaultBranch, currentBranch, remoteBranches } = await getBranchesForSession(selectedSource, apiClient, logChannel, context, { showProgress: true });
 
         // QuickPickでブランチ選択
         const selectedBranch = await vscode.window.showQuickPick(
@@ -1236,7 +1236,7 @@ export function activate(context: vscode.ExtensionContext) {
 
               // Force refresh branches cache after remote branch creation
               try {
-                await getBranchesForSession(selectedSource, apiClient, logChannel, context, true);
+                await getBranchesForSession(selectedSource, apiClient, logChannel, context, { forceRefresh: true, showProgress: true });
                 logChannel.appendLine('[Jules] Branches cache refreshed after remote branch creation');
               } catch (error) {
                 logChannel.appendLine(`[Jules] Failed to refresh branches cache: ${error}`);
