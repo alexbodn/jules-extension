@@ -21,7 +21,7 @@ jobs:
             const commentId = context.payload.comment.id;
 
             // Check if PR is created by google-labs-jules
-            if (prAuthor !== 'google-labs-jules') {
+            if (!prAuthor.toLowerCase().includes('jules')) {
               console.log('PR not created by google-labs-jules, skipping.');
               return;
             }
