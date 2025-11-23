@@ -18,10 +18,17 @@ jobs:
         with:
           github-token: $ secrets.GITHUB_TOKEN
           script: |
-            const prNumber = context.payload.pull_request.number;
-            const prAuthor = context.payload.pull_request.user.login;
-            const reviewComment = context.payload.comment.body;
-            const commentId = context.payload.comment.id;
+            const payload = context.payload;
+            // 修正: issue_commentの場合はpayload.issue.number、reviewの場合はpull_request.number
+            const prNumber = payload.issue ? payload.issue.number : payload.pull_request.number;
+
+            // 修正: PR作成者の取得ロジックをイベントごとに分ける
+            // issue_commentの場合: payload.issue.user
+            // pull_request_review_commentの場合: payload.pull_request.user
+            const prData = payload.issue || payload.pull_request;
+            const prAuthor = prData.user.login;
+
+            const reviewComment = payload.comment.body;
 
             // Check if PR is created by google-labs-jules
             if (!prAuthor.toLowerCase().includes('jules')) {
