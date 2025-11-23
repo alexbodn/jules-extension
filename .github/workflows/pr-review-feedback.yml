@@ -13,7 +13,7 @@ jobs:
       - name: Send feedback to Jules
         uses: actions/github-script@v6
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: $ secrets.GITHUB_TOKEN 
           script: |
             const prNumber = context.payload.pull_request.number;
             const prAuthor = context.payload.pull_request.user.login;
