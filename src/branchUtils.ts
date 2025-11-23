@@ -94,7 +94,7 @@ export async function getBranchesForSession(
         const cached = context.globalState.get<BranchesCache>(cacheKey);
 
         if (cached && isCacheValid(cached.timestamp)) {
-            outputChannel.appendLine(`[Jules] Using cached branches (${cached.branches.length} branches)`);
+            outputChannel.appendLine(`[Jules] Using cached branches (${cached.branches.length} branches, last updated: ${new Date(cached.timestamp).toLocaleString()})`);
             return {
                 branches: cached.branches,
                 defaultBranch: cached.defaultBranch,

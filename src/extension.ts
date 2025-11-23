@@ -684,6 +684,25 @@ class JulesSessionsProvider
 
       // --- Update the cache ---
       this.sessionsCache = allSessionsMapped;
+      if (isBackground) {
+        const selectedSource = this.context.globalState.get<SourceType>("selected-source");
+        if (selectedSource) {
+          console.log(`Jules: Background refresh, updating branches for ${selectedSource.name}`);
+          try {
+            const apiKey = await getStoredApiKey(this.context);
+            if (apiKey) {
+              const apiClient = new JulesApiClient(apiKey, JULES_API_BASE_URL);
+              // We're using a throwaway output channel here as we don't want to show the logs to the user
+              const silentOutputChannel = vscode.window.createOutputChannel("Jules Background");
+              await getBranchesForSession(selectedSource, apiClient, silentOutputChannel, this.context, true);
+              silentOutputChannel.dispose();
+              console.log("Jules: Branch cache updated successfully during background refresh");
+            }
+          } catch (e) {
+            console.error("Jules: Failed to update branch cache during background refresh", e);
+          }
+        }
+      }
     } catch (error) {
       console.error("Jules: Error during fetchAndProcessSessions:", error);
       this.sessionsCache = []; // Clear cache on error
