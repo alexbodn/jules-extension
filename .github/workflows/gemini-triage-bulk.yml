@@ -1,0 +1,158 @@
+name: "📋 Gemini Bulk Triage"
+
+on:
+    workflow_call:
+        inputs:
+            issues_to_triage:
+                type: "string"
+                description: "JSON array of issues to triage"
+                required: true
+            additional_context:
+                type: "string"
+                description: "Any additional context from the request"
+                required: false
+            language:
+                type: "string"
+                description: "Response language (default: 'ja' — JP)."
+                default: "ja"
+            gemini_model:
+                type: "string"
+                description: "Gemini model override"
+                required: false
+                default: ""
+        outputs:
+            available_labels:
+                description: "List of available labels"
+                value: ${{ jobs.triage_bulk.outputs.available_labels }}
+            triaged_issues:
+                description: "JSON string of triaged issues"
+                value: ${{ jobs.triage_bulk.outputs.triaged_issues }}
+        secrets:
+            GEMINI_API_KEY:
+                required: true
+
+defaults:
+    run:
+        shell: "bash"
+
+jobs:
+    triage_bulk:
+        runs-on: "ubuntu-latest"
+        timeout-minutes: 5
+        permissions:
+            contents: "read"
+            issues: "read"
+            pull-requests: "read"
+        outputs:
+            available_labels: "${{ steps.get_labels.outputs.available_labels }}"
+            triaged_issues: "${{ steps.collect_outputs.outputs.triaged_issues }}"
+        steps:
+            - name: "Get repository labels"
+              id: "get_labels"
+              uses: "actions/github-script@v7"
+              with:
+                  script: |-
+                      const { data: labels } = await github.rest.issues.listLabelsForRepo({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                      });
+
+                      if (!labels || labels.length === 0) {
+                        core.setFailed('There are no issue labels in this repository.')
+                      }
+
+                      const labelNames = labels.map(label => label.name).sort();
+                      core.setOutput('available_labels', labelNames.join(','));
+                      core.info(`Found ${labelNames.length} labels: ${labelNames.join(', ')}`);
+                      return labelNames;
+
+            - name: "Run Gemini Issue Analysis (bulk)"
+              id: "gemini_issue_analysis"
+              uses: "google-github-actions/run-gemini-cli@v0" # ratchet:exclude
+              env:
+                  GITHUB_TOKEN: "${{ github.token }}"
+                  ISSUES_TO_TRIAGE: "${{ inputs.issues_to_triage }}"
+                  REPOSITORY: "${{ github.repository }}"
+                  AVAILABLE_LABELS: "${{ steps.get_labels.outputs.available_labels }}"
+                  GEMINI_API_KEY: "${{ secrets.GEMINI_API_KEY }}"
+              with:
+                  # No GCP fields - using API key only
+                  gemini_api_key: "${{ secrets.GEMINI_API_KEY }}"
+                  gemini_model: "${{ inputs.gemini_model || vars.GEMINI_MODEL || '' }}"
+                  settings: |-
+                      {
+                        "model": {
+                          "maxSessionTurns": 25
+                        },
+                        "telemetry": {
+                          "enabled": false
+                        },
+                        "tools": {
+                          "core": [
+                            "run_shell_command"
+                          ]
+                        }
+                      }
+                  prompt: |-
+                      出力は必ず日本語で行ってください。
+                      応答言語: ${{ inputs.language }}
+
+                      ## Role
+                      You are a highly efficient Issue Triage Engineer. Your task is to analyze the provided GitHub issues and assign the most relevant labels from the available list.
+
+                      ## Input Data
+
+                      **Available Labels:**
+                      ${{ steps.get_labels.outputs.available_labels }}
+
+                      **Issues to Triage (JSON):**
+                      ${{ inputs.issues_to_triage }}
+
+                      ## Primary Directive
+                      Analyze the issues above and generate a JSON array containing your triage decisions.
+
+                      Target File Path: /tmp/triaged_issues.json
+
+                      Output Format (JSON Array):
+                      [
+                        {
+                          "issue_number": <number>,
+                          "labels_to_set": ["<label1>", "<label2>"],
+                          "explanation": "<brief explanation in Japanese>"
+                        }
+                      ]
+
+                      ## Strict Output Rules
+                      1. You MUST NOT output the JSON content in your text response.
+                      2. You MUST use the Python script below to write the file to avoid quoting issues.
+
+                      Execute exactly this format:
+                      run_shell_command(python3 -c "import json; f=open('/tmp/triaged_issues.json', 'w'); json.dump(YOUR_ANALYSIS_RESULT_LIST, f, ensure_ascii=False); f.close()")
+
+                      Warning: Do not use example data. Output the actual analysis results for the issues provided above.
+                      Execute the Python script now.
+
+            - name: "Collect outputs"
+              id: "collect_outputs"
+              uses: "actions/github-script@v7"
+              with:
+                  script: |-
+                      const fs = require('fs');
+                      const path = '/tmp/triaged_issues.json';
+                      let triagedIssues = '[]';
+
+                      try {
+                        if (fs.existsSync(path)) {
+                          const content = fs.readFileSync(path, 'utf8');
+                          console.log('File content preview:', content.substring(0, 100)); // プレビューも出す
+                          // Validate JSON
+                          JSON.parse(content);
+                          triagedIssues = content;
+                        } else {
+                          core.warning('⚠️ Output file /tmp/triaged_issues.json was NOT found. Gemini likely failed to execute the write command.');
+                        }
+                      } catch (error) {
+                        core.warning(`Error reading or parsing triaged issues file: ${error.message}`);
+                      }
+
+                      core.setOutput('triaged_issues', triagedIssues);
