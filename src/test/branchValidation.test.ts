@@ -139,12 +139,10 @@ You can push this branch first, or use the default branch "${'main'}" instead.`,
         // 再取得後のリモートブランチに存在する場合は警告を表示しない
         if (!currentRemoteBranches.includes(startingBranch)) {
             await vscode.window.showWarningMessage(
-                `Branch "${startingBranch}" exists locally but has not been pushed to remote.
-
-Jules requires a remote branch to start a session.`,
+                `Branch "${startingBranch}" exists locally but has not been pushed to remote.\n\nJules requires a remote branch to start a session.`,
                 { modal: true },
-                'Create Remote Branch',
-                'Use Default Branch'
+                { title: 'Create Remote Branch' },
+                { title: 'Use Default Branch' }
             );
         }
 
@@ -173,12 +171,10 @@ Jules requires a remote branch to start a session.`,
         // 再取得後もリモートブランチに存在しない場合は警告を表示
         if (!currentRemoteBranches.includes(startingBranch)) {
             await vscode.window.showWarningMessage(
-                `Branch "${startingBranch}" exists locally but has not been pushed to remote.
-
-Jules requires a remote branch to start a session.`,
+                `Branch "${startingBranch}" exists locally but has not been pushed to remote.\n\nJules requires a remote branch to start a session.`,
                 { modal: true },
-                'Create Remote Branch',
-                'Use Default Branch'
+                { title: 'Create Remote Branch' },
+                { title: 'Use Default Branch' }
             );
         }
 
