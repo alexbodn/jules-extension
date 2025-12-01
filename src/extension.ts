@@ -2,7 +2,7 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from "vscode";
 import { JulesApiClient } from './julesApiClient';
-import { GitHubBranch, GitHubRepo, Source as SourceType, SourcesResponse } from './types';
+import { GitHubBranch, GitHubRepo, Source as SourceType, SourcesResponse, Activity, ActivitiesResponse, Plan } from './types';
 import { getBranchesForSession } from './branchUtils';
 import { showMessageComposer } from './composer';
 import { parseGitHubUrl } from "./githubUtils";
@@ -12,6 +12,8 @@ import { exec } from 'child_process';
 
 const execAsync = promisify(exec);
 import { SourcesCache, isCacheValid } from './cache';
+import { ArtifactsViewer } from './artifactsViewer';
+import { ActivitiesWebView } from './activitiesWebView';
 
 // Constants
 const JULES_API_BASE_URL = "https://jules.googleapis.com/v1alpha";
@@ -570,27 +572,6 @@ interface SessionsResponse {
   sessions: Session[];
 }
 
-interface Plan {
-  title?: string;
-  steps?: string[];
-}
-
-interface Activity {
-  name: string;
-  createTime: string;
-  originator: "user" | "agent";
-  id: string;
-  type?: string;
-  planGenerated?: { plan: Plan };
-  planApproved?: { planId: string };
-  progressUpdated?: { title: string; description?: string };
-  sessionCompleted?: Record<string, never>;
-}
-
-interface ActivitiesResponse {
-  activities: Activity[];
-}
-
 function getActivityIcon(activity: Activity): string {
   if (activity.planGenerated) {
     return "📝";
@@ -603,6 +584,10 @@ function getActivityIcon(activity: Activity): string {
   }
   if (activity.sessionCompleted) {
     return "✅";
+  }
+  // Artifactsがある場合
+  if (activity.artifacts && activity.artifacts.length > 0) {
+    return "📎";
   }
   return "ℹ️";
 }
@@ -1489,22 +1474,28 @@ export function activate(context: vscode.ExtensionContext) {
           vscode.window.showErrorMessage("Invalid response format from API.");
           return;
         }
+
+        // WebViewでActivitiesを表示
+        ActivitiesWebView.show(
+          context.extensionUri,
+          sessionId,
+          session.title || sessionId,
+          data.activities
+        );
+
+        // ログチャンネルにも出力（デバッグ用）
         activitiesChannel.clear();
-        activitiesChannel.show();
         activitiesChannel.appendLine(`Activities for session: ${sessionId}`);
         activitiesChannel.appendLine("---");
         if (data.activities.length === 0) {
           activitiesChannel.appendLine("No activities found for this session.");
         } else {
-          let planDetected = false;
           data.activities.forEach((activity) => {
             const icon = getActivityIcon(activity);
             const timestamp = new Date(activity.createTime).toLocaleString();
             let message = "";
             if (activity.planGenerated) {
-              message = `Plan generated: ${activity.planGenerated.plan?.title || "Plan"
-                }`;
-              planDetected = true;
+              message = `Plan generated: ${activity.planGenerated.plan?.title || "Plan"}`;
             } else if (activity.planApproved) {
               message = `Plan approved: ${activity.planApproved.planId}`;
             } else if (activity.progressUpdated) {
@@ -1517,8 +1508,12 @@ export function activate(context: vscode.ExtensionContext) {
             } else {
               message = "Unknown activity";
             }
+            // Artifacts情報を追加
+            const artifactInfo = activity.artifacts && activity.artifacts.length > 0
+              ? ` [📎 ${activity.artifacts.length} artifacts]`
+              : '';
             activitiesChannel.appendLine(
-              `${icon} ${timestamp} (${activity.originator}): ${message}`
+              `${icon} ${timestamp} (${activity.originator}): ${message}${artifactInfo}`
             );
           });
         }
@@ -1528,6 +1523,24 @@ export function activate(context: vscode.ExtensionContext) {
           "Failed to fetch activities. Please check your internet connection."
         );
       }
+    }
+  );
+
+  // showArtifactsコマンド - Activityのartifactsを表示
+  const showArtifactsDisposable = vscode.commands.registerCommand(
+    "jules-extension.showArtifacts",
+    async (activity: Activity) => {
+      if (!activity) {
+        vscode.window.showErrorMessage("Activity が指定されていません");
+        return;
+      }
+      
+      if (!activity.artifacts || activity.artifacts.length === 0) {
+        vscode.window.showInformationMessage("この Activity には Artifacts がありません");
+        return;
+      }
+
+      ArtifactsViewer.show(context.extensionUri, activity);
     }
   );
 
@@ -1759,6 +1772,7 @@ export function activate(context: vscode.ExtensionContext) {
     sessionsTreeView,
     refreshSessionsDisposable,
     showActivitiesDisposable,
+    showArtifactsDisposable,
     refreshActivitiesDisposable,
     sendMessageDisposable,
     approvePlanDisposable,

@@ -135,6 +135,11 @@
         "title": "Show Jules Activities"
       },
       {
+        "command": "jules-extension.showArtifacts",
+        "title": "Show Activity Artifacts",
+        "icon": "$(file-media)"
+      },
+      {
         "command": "jules-extension.refreshActivities",
         "title": "Refresh Jules Activities",
         "icon": "$(refresh)"
