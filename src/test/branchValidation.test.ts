@@ -236,7 +236,7 @@ You can push this branch first, or use the default branch "${'main'}" instead.`,
             getExtensionStub = sandbox.stub(vscode.extensions, 'getExtension');
             getExtensionStub.returns({ exports: { getAPI: () => gitApi } } as any);
 
-            const selectedSource = buildSource('owner', 'repo');
+            const selectedSource = buildSource('Owner', 'Repo');
             const apiClient = { getSource: sandbox.stub().resolves(selectedSource) } as unknown as JulesApiClient;
 
             const result = await getBranchesForSession(selectedSource, apiClient, outputChannel, contextStub, { showProgress: false });
