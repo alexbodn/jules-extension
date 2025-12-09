@@ -6,6 +6,45 @@ import { parseGitHubUrl } from './githubUtils';
 
 const DEFAULT_FALLBACK_BRANCH = 'main';
 
+async function getActiveRepository(outputChannel: vscode.OutputChannel): Promise<any | null> {
+    const gitExtension = vscode.extensions.getExtension('vscode.git');
+    if (!gitExtension) {
+        outputChannel.appendLine('Git extension not available');
+        return null;
+    }
+
+    const git = gitExtension.exports.getAPI(1);
+    if (!git || git.repositories.length === 0) {
+        outputChannel.appendLine('No git repositories found');
+        return null;
+    }
+
+    let repository;
+    if (git.repositories.length === 1) {
+        repository = git.repositories[0];
+    } else {
+        // Multi-root workspace: let user select repository
+        interface RepoItem extends vscode.QuickPickItem {
+            repo: any;
+        }
+        const repoItems: RepoItem[] = git.repositories.map((repo: any, index: number) => ({
+            label: repo.rootUri.fsPath.split('/').pop() || `Repository ${index + 1}`,
+            description: repo.rootUri.fsPath,
+            repo
+        }));
+        const selected = await vscode.window.showQuickPick(repoItems, {
+            placeHolder: 'Select a Git repository'
+        });
+        if (!selected) {
+            outputChannel.appendLine('No repository selected');
+            return null;
+        }
+        repository = selected.repo;
+    }
+
+    return repository;
+}
+
 /**
  * 現在のGitブランチを取得する
  * @param outputChannel ログ出力チャンネル
@@ -13,45 +52,9 @@ const DEFAULT_FALLBACK_BRANCH = 'main';
  */
 export async function getCurrentBranch(outputChannel: vscode.OutputChannel): Promise<string | null> {
     try {
-        const gitExtension = vscode.extensions.getExtension('vscode.git');
-        if (!gitExtension) {
-            outputChannel.appendLine('Git extension not available');
+        const repository = await getActiveRepository(outputChannel);
+        if (!repository) {
             return null;
-        }
-
-        const git = gitExtension.exports.getAPI(1);
-        if (!git) {
-            outputChannel.appendLine('Git API not available');
-            return null;
-        }
-
-        const repositories = git.repositories;
-        if (repositories.length === 0) {
-            outputChannel.appendLine('No git repositories found');
-            return null;
-        }
-
-        let repository;
-        if (repositories.length === 1) {
-            repository = repositories[0];
-        } else {
-            // Multi-root workspace: let user select repository
-            interface RepoItem extends vscode.QuickPickItem {
-                repo: any;
-            }
-            const repoItems: RepoItem[] = repositories.map((repo: any, index: number) => ({
-                label: repo.rootUri.fsPath.split('/').pop() || `Repository ${index + 1}`,
-                description: repo.rootUri.fsPath,
-                repo
-            }));
-            const selected = await vscode.window.showQuickPick(repoItems, {
-                placeHolder: 'Select a Git repository'
-            });
-            if (!selected) {
-                outputChannel.appendLine('No repository selected');
-                return null;
-            }
-            repository = selected.repo;
         }
 
         const head = repository.state.HEAD;
@@ -69,42 +72,12 @@ export async function getCurrentBranch(outputChannel: vscode.OutputChannel): Pro
 
 async function getWorkspaceGitHubRepo(outputChannel: vscode.OutputChannel): Promise<{ owner: string; repo: string } | null> {
     try {
-        const gitExtension = vscode.extensions.getExtension('vscode.git');
-        if (!gitExtension) {
-            outputChannel.appendLine('Git extension not available');
+        const repository = await getActiveRepository(outputChannel);
+        if (!repository) {
             return null;
         }
 
-        const git = gitExtension.exports.getAPI(1);
-        if (!git || git.repositories.length === 0) {
-            outputChannel.appendLine('No git repositories found');
-            return null;
-        }
-
-        let repository;
-        if (git.repositories.length === 1) {
-            repository = git.repositories[0];
-        } else {
-            // Multi-root workspace: let user select repository
-            interface RepoItem extends vscode.QuickPickItem {
-                repo: any;
-            }
-            const repoItems: RepoItem[] = git.repositories.map((repo: any, index: number) => ({
-                label: repo.rootUri.fsPath.split('/').pop() || `Repository ${index + 1}`,
-                description: repo.rootUri.fsPath,
-                repo
-            }));
-            const selected = await vscode.window.showQuickPick(repoItems, {
-                placeHolder: 'Select a Git repository'
-            });
-            if (!selected) {
-                outputChannel.appendLine('No repository selected');
-                return null;
-            }
-            repository = selected.repo;
-        }
-
-        const remote = repository.state.remotes.find((r: vscode.git.Remote) => r.name === 'origin');
+        const remote = repository.state.remotes.find((r: any) => r.name === 'origin');
         if (!remote) {
             outputChannel.appendLine('No origin remote found');
             return null;
