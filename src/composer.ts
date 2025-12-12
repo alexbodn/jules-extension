@@ -174,8 +174,8 @@ export function getComposerHtml(
   <div class="actions">
     ${createPrCheckbox}
     ${requireApprovalCheckbox}
-    <button type="button" id="cancel" title="Cancel (Esc)" aria-label="Cancel">Cancel</button>
-    <button type="button" id="submit" class="primary" title="Send (Cmd/Ctrl+Enter)" aria-label="Send message">Send</button>
+    <button type="button" id="cancel" title="Cancel (Esc)" aria-label="Cancel (Esc)">Cancel</button>
+    <button type="button" id="submit" class="primary" title="Send (Cmd/Ctrl+Enter)" aria-label="Send message (Cmd/Ctrl+Enter)">Send</button>
   </div>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
