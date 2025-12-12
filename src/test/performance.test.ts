@@ -40,22 +40,19 @@ suite("Performance Tests", () => {
     test("updatePreviousStates should be performant with multiple PR checks", async () => {
         // Create 5 completed sessions with PRs
         // Using fewer sessions to keep test fast, but enough to show difference
-        const sessions: Session[] = [];
-        for (let i = 0; i < 5; i++) {
-            sessions.push({
-                name: `session-${i}`,
-                title: `Session ${i}`,
-                state: "COMPLETED",
-                rawState: "COMPLETED",
-                outputs: [{
-                    pullRequest: {
-                        url: `https://github.com/owner/repo/pull/${i}`,
-                        title: "PR",
-                        description: "desc"
-                    }
-                }]
-            });
-        }
+        const sessions: Session[] = Array.from({ length: 5 }, (_, i) => ({
+            name: `session-${i}`,
+            title: `Session ${i}`,
+            state: "COMPLETED",
+            rawState: "COMPLETED",
+            outputs: [{
+                pullRequest: {
+                    url: `https://github.com/owner/repo/pull/${i}`,
+                    title: "PR",
+                    description: "desc"
+                }
+            }]
+        }));
 
         const start = Date.now();
         await updatePreviousStates(sessions, mockContext);

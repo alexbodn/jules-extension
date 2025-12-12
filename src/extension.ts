@@ -583,10 +583,10 @@ export async function updatePreviousStates(
   if (sessionsToCheck.length > 0) {
     await Promise.all(sessionsToCheck.map(async (session) => {
       const prUrl = extractPRUrl(session);
-      if (prUrl) {
-        const isClosed = await checkPRStatus(prUrl, context);
-        prStatusMap.set(session.name, isClosed);
-      }
+      // The `if (prUrl)` check is redundant because `sessionsToCheck` is already filtered.
+      // `prUrl` is guaranteed to be non-null here.
+      const isClosed = await checkPRStatus(prUrl!, context);
+      prStatusMap.set(session.name, isClosed);
     }));
   }
 
