@@ -13,6 +13,7 @@ import { exec } from 'child_process';
 const execAsync = promisify(exec);
 import { SourcesCache, isCacheValid } from './cache';
 import { stripUrlCredentials } from './securityUtils';
+import { fetchWithTimeout } from './fetchUtils';
 
 // Constants
 const JULES_API_BASE_URL = "https://jules.googleapis.com/v1alpha";
@@ -358,7 +359,7 @@ async function checkPRStatus(
       headers.Authorization = `Bearer ${githubToken}`;
     }
 
-    const response = await fetch(apiUrl, { headers });
+    const response = await fetchWithTimeout(apiUrl, { headers });
 
     if (!response.ok) {
       console.log(
@@ -796,7 +797,7 @@ class JulesSessionsProvider
         return;
       }
 
-      const response = await fetch(`${JULES_API_BASE_URL}/sessions`, {
+      const response = await fetchWithTimeout(`${JULES_API_BASE_URL}/sessions`, {
         method: "GET",
         headers: {
           "X-Goog-Api-Key": apiKey,
