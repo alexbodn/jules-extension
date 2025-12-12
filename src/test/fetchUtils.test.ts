@@ -1,41 +1,40 @@
 import * as assert from 'assert';
-import * as sinon from 'sinon';
 import { fetchWithTimeout } from '../fetchUtils';
 
 describe('fetchUtils', () => {
-    let fetchStub: sinon.SinonStub;
     let originalFetch: any;
+    let fetchCalls: any[] = [];
 
     beforeEach(() => {
         originalFetch = global.fetch;
-        fetchStub = sinon.stub();
-        global.fetch = fetchStub as any;
+        fetchCalls = [];
+        // Mock global fetch
+        // @ts-ignore
+        global.fetch = async (input: any, init: any) => {
+            fetchCalls.push({ input, init });
+            return { ok: true } as any;
+        };
     });
 
     afterEach(() => {
         global.fetch = originalFetch;
-        sinon.restore();
     });
 
     it('should call fetch with provided arguments', async () => {
-        fetchStub.resolves({ ok: true } as any);
         await fetchWithTimeout('https://example.com');
-        assert.ok(fetchStub.calledWith('https://example.com'));
+        assert.strictEqual(fetchCalls.length, 1);
+        assert.strictEqual(fetchCalls[0].input, 'https://example.com');
     });
 
     it('should pass a signal to fetch', async () => {
-        fetchStub.resolves({ ok: true } as any);
         await fetchWithTimeout('https://example.com');
-
-        const call = fetchStub.getCall(0);
-        const args = call.args;
-        const init = args[1];
+        assert.strictEqual(fetchCalls.length, 1);
+        const init = fetchCalls[0].init;
         assert.ok(init.signal, 'Signal should be present');
     });
 
     it('should respect custom timeout option', async () => {
-        fetchStub.resolves({ ok: true } as any);
         await fetchWithTimeout('https://example.com', { timeout: 1000 });
-        assert.ok(fetchStub.calledOnce);
+        assert.strictEqual(fetchCalls.length, 1);
     });
 });
