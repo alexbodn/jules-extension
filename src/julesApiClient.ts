@@ -1,4 +1,5 @@
 import { Source as SourceType } from './types';
+import { fetchWithTimeout } from './fetchUtils';
 
 export class JulesApiClient {
     private baseUrl: string;
@@ -9,9 +10,9 @@ export class JulesApiClient {
         this.apiKey = apiKey;
     }
 
-    private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
+    private async request<T>(endpoint: string, options?: RequestInit & { timeout?: number }): Promise<T> {
         const url = `${this.baseUrl}${endpoint}`;
-        const response = await fetch(url, {
+        const response = await fetchWithTimeout(url, {
             ...options,
             headers: {
                 'X-Goog-Api-Key': this.apiKey,
