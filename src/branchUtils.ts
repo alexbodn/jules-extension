@@ -102,6 +102,34 @@ async function getWorkspaceGitHubRepo(outputChannel: vscode.OutputChannel): Prom
     }
 }
 
+function areArraysEqual(a: string[], b: string[]): boolean {
+    if (a.length !== b.length) {
+        return false;
+    }
+    for (let i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function areCacheContentsEqual(a: BranchesCache, b: BranchesCache): boolean {
+    if (a.defaultBranch !== b.defaultBranch) {
+        return false;
+    }
+    if (a.currentBranch !== b.currentBranch) {
+        return false;
+    }
+    if (!areArraysEqual(a.branches, b.branches)) {
+        return false;
+    }
+    if (!areArraysEqual(a.remoteBranches, b.remoteBranches)) {
+        return false;
+    }
+    return true;
+}
+
 /**
  * セッション作成時のブランチ選択に必要な情報を取得する
  * @param selectedSource 選択されたソース
@@ -200,8 +228,28 @@ export async function getBranchesForSession(
             currentBranch,
             timestamp: Date.now()
         };
-        await context.globalState.update(cacheKey, cache);
-        outputChannel.appendLine(`[Jules] Cached ${branches.length} branches`);
+
+        const existingCache = context.globalState.get<BranchesCache>(cacheKey);
+        let shouldUpdate = true;
+
+        if (existingCache && areCacheContentsEqual(existingCache, cache)) {
+            // Data hasn't changed.
+            // Check if we need to refresh timestamp
+            const age = cache.timestamp - existingCache.timestamp;
+            const REFRESH_THRESHOLD = 3 * 60 * 1000; // 3 minutes
+
+            if (age < REFRESH_THRESHOLD) {
+                shouldUpdate = false;
+                outputChannel.appendLine(`[Jules] Branch cache unchanged and fresh (age: ${Math.round(age / 1000)}s), skipping write.`);
+            } else {
+                outputChannel.appendLine(`[Jules] Branch cache unchanged but aging, refreshing timestamp.`);
+            }
+        }
+
+        if (shouldUpdate) {
+            await context.globalState.update(cacheKey, cache);
+            outputChannel.appendLine(`[Jules] Cached ${branches.length} branches`);
+        }
 
         return { branches, defaultBranch: selectedDefaultBranch, currentBranch, remoteBranches };
     };
