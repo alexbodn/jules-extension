@@ -376,7 +376,12 @@ You can push this branch first, or use the default branch "${'main'}" instead.`,
             const result = await getBranchesForSession(selectedSource, apiClient, outputChannel, contextStub, { forceRefresh: false, showProgress: false });
 
             assert.strictEqual((apiClient.getSource as sinon.SinonStub).called, false, 'Should not call API');
-            assert.deepStrictEqual(result.branches, cachedData.branches);
+            assert.deepStrictEqual(result, {
+                branches: cachedData.branches,
+                remoteBranches: cachedData.remoteBranches,
+                defaultBranch: cachedData.defaultBranch,
+                currentBranch: cachedData.currentBranch
+            });
         });
     });
 });

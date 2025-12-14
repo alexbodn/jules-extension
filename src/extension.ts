@@ -909,8 +909,9 @@ class JulesSessionsProvider
       // The createSession command handles stale cache gracefully by re-fetching if the selected branch is missing from the remote list.
       await getBranchesForSession(selectedSource, apiClient, JulesSessionsProvider.silentOutputChannel, this.context, { forceRefresh: false, showProgress: false });
       console.log("Jules: Branch cache updated successfully during background refresh");
-    } catch (e) {
-      console.error("Jules: Failed to update branch cache during background refresh", e);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`Jules: Failed to update branch cache during background refresh for ${selectedSource.name}: ${errorMessage}`);
     }
   }
 
