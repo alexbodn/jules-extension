@@ -360,5 +360,23 @@ You can push this branch first, or use the default branch "${'main'}" instead.`,
 
             assert.strictEqual((contextStub.globalState.update as sinon.SinonStub).called, true, 'Should update globalState');
         });
+
+        test('should use cache and skip API call if forceRefresh is false and cache is valid', async () => {
+            const now = Date.now();
+            const cachedData = {
+                branches: ['main', 'cached-branch'],
+                remoteBranches: ['main', 'cached-branch'],
+                defaultBranch: 'main',
+                currentBranch: 'main',
+                timestamp: now - 1000 // 1 second old
+            };
+
+            (contextStub.globalState.get as sinon.SinonStub).returns(cachedData);
+
+            const result = await getBranchesForSession(selectedSource, apiClient, outputChannel, contextStub, { forceRefresh: false, showProgress: false });
+
+            assert.strictEqual((apiClient.getSource as sinon.SinonStub).called, false, 'Should not call API');
+            assert.deepStrictEqual(result.branches, cachedData.branches);
+        });
     });
 });
