@@ -244,7 +244,7 @@ async function createRemoteBranch(
     logger.appendLine(`[Jules] Current branch SHA: ${sha}`);
     logger.appendLine(`[Jules] Creating remote branch: ${branchName}`);
 
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `https://api.github.com/repos/${owner}/${repo}/git/refs`,
       {
         method: 'POST',
@@ -437,7 +437,7 @@ async function fetchPlanFromActivities(
   apiKey: string
 ): Promise<Plan | null> {
   try {
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `${JULES_API_BASE_URL}/${sessionId}/activities`,
       {
         method: "GET",
@@ -473,12 +473,15 @@ function formatPlanForNotification(plan: Plan): string {
     parts.push(`📋 ${plan.title}`);
   }
   if (plan.steps && plan.steps.length > 0) {
-    const stepsPreview = plan.steps.slice(0, MAX_PLAN_STEPS_IN_NOTIFICATION);
+    const stepsPreview = plan.steps
+      .filter((step): step is PlanStep => !!step)
+      .slice(0, MAX_PLAN_STEPS_IN_NOTIFICATION);
     stepsPreview.forEach((step, index) => {
+      const stepDescription = step?.description || '';
       // Truncate long steps for notification display
-      const truncatedStep = step.length > MAX_PLAN_STEP_LENGTH
-        ? step.substring(0, MAX_PLAN_STEP_LENGTH - 3) + '...'
-        : step;
+      const truncatedStep = stepDescription.length > MAX_PLAN_STEP_LENGTH
+        ? stepDescription.substring(0, MAX_PLAN_STEP_LENGTH - 3) + '...'
+        : stepDescription;
       parts.push(`${index + 1}. ${truncatedStep}`);
     });
     if (plan.steps.length > MAX_PLAN_STEPS_IN_NOTIFICATION) {
@@ -718,9 +721,13 @@ interface SessionsResponse {
   sessions: Session[];
 }
 
+interface PlanStep {
+  description: string;
+}
+
 interface Plan {
   title?: string;
-  steps?: string[];
+  steps?: PlanStep[];
 }
 
 interface Activity {
@@ -905,10 +912,13 @@ class JulesSessionsProvider
     console.log(`Jules: Background refresh, updating branches for ${selectedSource.name}`);
     try {
       const apiClient = new JulesApiClient(apiKey, JULES_API_BASE_URL);
-      await getBranchesForSession(selectedSource, apiClient, JulesSessionsProvider.silentOutputChannel, this.context, { forceRefresh: true, showProgress: false });
+      // Use forceRefresh: false to respect the cache TTL (5 min).
+      // The createSession command handles stale cache gracefully by re-fetching if the selected branch is missing from the remote list.
+      await getBranchesForSession(selectedSource, apiClient, JulesSessionsProvider.silentOutputChannel, this.context, { forceRefresh: false, showProgress: false });
       console.log("Jules: Branch cache updated successfully during background refresh");
-    } catch (e) {
-      console.error("Jules: Failed to update branch cache during background refresh", e);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`Jules: Failed to update branch cache during background refresh for ${selectedSource.name}: ${errorMessage}`);
     }
   }
 
@@ -1083,7 +1093,7 @@ async function approvePlan(
         title: "Approving plan...",
       },
       async () => {
-        const response = await fetch(
+        const response = await fetchWithTimeout(
           `${JULES_API_BASE_URL}/${sessionId}:approvePlan`,
           {
             method: "POST",
@@ -1155,7 +1165,7 @@ async function sendMessageToSession(
         title: "Sending message to Jules...",
       },
       async () => {
-        const response = await fetch(
+        const response = await fetchWithTimeout(
           `${JULES_API_BASE_URL}/${sessionId}:sendMessage`,
           {
             method: "POST",
@@ -1277,7 +1287,7 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
       try {
-        const response = await fetch(`${JULES_API_BASE_URL}/sources`, {
+        const response = await fetchWithTimeout(`${JULES_API_BASE_URL}/sources`, {
           method: "GET",
           headers: {
             "X-Goog-Api-Key": apiKey,
@@ -1324,7 +1334,7 @@ export function activate(context: vscode.ExtensionContext) {
             title: 'Fetching sources...',
             cancellable: false
           }, async (progress) => {
-            const response = await fetch(`${JULES_API_BASE_URL}/sources`, {
+            const response = await fetchWithTimeout(`${JULES_API_BASE_URL}/sources`, {
               method: "GET",
               headers: {
                 "X-Goog-Api-Key": apiKey,
@@ -1549,7 +1559,7 @@ export function activate(context: vscode.ExtensionContext) {
               increment: 0,
               message: "Sending request...",
             });
-            const response = await fetch(`${JULES_API_BASE_URL}/sessions`, {
+            const response = await fetchWithTimeout(`${JULES_API_BASE_URL}/sessions`, {
               method: "POST",
               headers: {
                 "X-Goog-Api-Key": apiKey,
@@ -1628,7 +1638,7 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
       try {
-        const sessionResponse = await fetch(
+        const sessionResponse = await fetchWithTimeout(
           `${JULES_API_BASE_URL}/${sessionId}`,
           {
             method: "GET",
@@ -1646,7 +1656,7 @@ export function activate(context: vscode.ExtensionContext) {
           return;
         }
         const session = (await sessionResponse.json()) as Session;
-        const response = await fetch(
+        const response = await fetchWithTimeout(
           `${JULES_API_BASE_URL}/${sessionId}/activities`,
           {
             method: "GET",

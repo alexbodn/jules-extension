@@ -9,6 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
+      issues: write
+      contents: write
     steps:
       - name: Check PR author
         id: check_author
@@ -27,7 +29,7 @@ jobs:
           PR_NUM=${{ github.event.pull_request.number }}
           IS_DRAFT=$(gh pr view $PR_NUM --json isDraft --jq '.isDraft')
           if [ "$IS_DRAFT" = "true" ]; then
-            gh pr ready $PR_NUM || echo "Warning: Failed to mark PR as ready. This is likely due to insufficient permissions."
+            gh pr ready $PR_NUM || echo "Warning: Failed to mark PR as ready. Continuing..."
           else
             echo "PR #$PR_NUM is already ready."
           fi
