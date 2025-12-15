@@ -12,7 +12,7 @@ import { exec } from 'child_process';
 
 const execAsync = promisify(exec);
 import { SourcesCache, isCacheValid } from './cache';
-import { stripUrlCredentials } from './securityUtils';
+import { stripUrlCredentials, sanitizeForLogging } from './securityUtils';
 import { fetchWithTimeout } from './fetchUtils';
 
 // Constants
@@ -842,7 +842,7 @@ class JulesSessionsProvider
       // デバッグ: APIレスポンスの生データを確認
       logChannel.appendLine(`Jules: Debug - Raw API response sample (first 3 sessions):`);
       data.sessions.slice(0, 3).forEach((s: any, i: number) => {
-        logChannel.appendLine(`  [${i}] name=${s.name}, state=${s.state}, title=${s.title}`);
+        logChannel.appendLine(`  [${i}] name=${s.name}, state=${s.state}, title=${sanitizeForLogging(s.title)}`);
         logChannel.appendLine(`      updateTime=${s.updateTime}`);
       });
 
@@ -954,7 +954,7 @@ class JulesSessionsProvider
         if (!notifiedSessions.has(session.name)) {
           notifier(session).catch((error) => {
             logChannel.appendLine(
-              `Jules: Failed to show ${notificationType} notification for session '${session.name}' (${session.title}): ${error}`
+              `Jules: Failed to show ${notificationType} notification for session '${session.name}' (${sanitizeForLogging(session.title)}): ${error}`
             );
           });
           notifiedSessions.add(session.name);
@@ -1529,7 +1529,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
           } else if (action === 'Use Default Branch') {
             startingBranch = selectedDefaultBranch;
-            logChannel.appendLine(`[Jules] Using default branch: ${selectedDefaultBranch}`);
+            logChannel.appendLine(`[Jules] Using default branch: ${sanitizeForLogging(selectedDefaultBranch)}`);
           } else {
             logChannel.appendLine('[Jules] Session creation cancelled by user');
             return;

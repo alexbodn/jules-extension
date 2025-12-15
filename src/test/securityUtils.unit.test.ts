@@ -1,5 +1,5 @@
 import * as assert from "assert";
-import { stripUrlCredentials } from "../securityUtils";
+import { stripUrlCredentials, sanitizeForLogging } from "../securityUtils";
 
 suite("Security Utils Test Suite", () => {
     test("stripUrlCredentials should remove credentials from HTTPS URLs", () => {
@@ -62,6 +62,35 @@ suite("Security Utils Test Suite", () => {
         const url = "https://user:pass@github.com:invalidport/repo";
         const expected = "https://github.com:invalidport/repo";
         const result = stripUrlCredentials(url);
+        assert.strictEqual(result, expected);
+    });
+
+    test("sanitizeForLogging should escape newlines and tabs", () => {
+        const input = "Line 1\nLine 2\tTabbed\rReturn";
+        const expected = "Line 1\\nLine 2\\tTabbed\\rReturn";
+        const result = sanitizeForLogging(input);
+        assert.strictEqual(result, expected);
+    });
+
+    test("sanitizeForLogging should truncate long strings", () => {
+        const input = "a".repeat(20);
+        assert.strictEqual(sanitizeForLogging(input, 10), "aaaaaaa...");
+        assert.strictEqual(sanitizeForLogging(input, 3), "aaa");
+    });
+
+    test("sanitizeForLogging should handle null/undefined", () => {
+        assert.strictEqual(sanitizeForLogging(null), "null");
+        assert.strictEqual(sanitizeForLogging(undefined), "undefined");
+    });
+
+    test("sanitizeForLogging should handle numbers", () => {
+        assert.strictEqual(sanitizeForLogging(123), "123");
+    });
+
+    test("sanitizeForLogging should remove non-printable control characters", () => {
+        const input = "Text\x00\x1FWith\x7FDeleteEnd";
+        const expected = "TextWithDeleteEnd";
+        const result = sanitizeForLogging(input);
         assert.strictEqual(result, expected);
     });
 });

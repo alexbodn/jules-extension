@@ -39,3 +39,39 @@ export function stripUrlCredentials(url: string): string {
         return url;
     }
 }
+
+/**
+ * Sanitizes a string for safe logging by escaping control characters and limiting length.
+ * This prevents log injection attacks and log flooding.
+ *
+ * @param value The value to sanitize
+ * @param maxLength Maximum length of the string (default: 500)
+ * @returns Sanitized string
+ */
+export function sanitizeForLogging(value: unknown, maxLength: number = 500): string {
+    if (value == null) {
+        return String(value);
+    }
+
+    // Convert to string in case it's not
+    let str = String(value);
+
+    // Truncate if too long, ensuring the result is not longer than maxLength
+    if (str.length > maxLength) {
+        if (maxLength < 4) { // Not enough space for '...'
+            str = str.substring(0, maxLength);
+        } else {
+            str = str.substring(0, maxLength - 3) + '...';
+        }
+    }
+
+    // Replace control characters
+    // \n -> \n, \r -> \r, \t -> \t
+    return str
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r')
+        .replace(/\t/g, '\\t')
+        // Remove other non-printable characters (except basic ASCII printable)
+        // \x00-\x08, \x0B-\x0C, \x0E-\x1F, \x7F
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+}

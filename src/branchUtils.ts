@@ -3,6 +3,7 @@ import { JulesApiClient } from './julesApiClient';
 import { Source as SourceType } from './types';
 import { BranchesCache, isCacheValid } from './cache';
 import { parseGitHubUrl } from './githubUtils';
+import { sanitizeForLogging } from './securityUtils';
 
 const DEFAULT_FALLBACK_BRANCH = 'main';
 const BRANCH_CACHE_TIMESTAMP_REFRESH_THRESHOLD_MS = 3 * 60 * 1000;
@@ -169,7 +170,7 @@ export async function getBranchesForSession(
             };
         }
     } else {
-        outputChannel.appendLine(`[Jules] Force refreshing branches for ${sourceId}`);
+        outputChannel.appendLine(`[Jules] Force refreshing branches for ${sanitizeForLogging(sourceId)}`);
     }
 
     outputChannel.appendLine(`[Jules] Fetching branches from API...`);
@@ -200,7 +201,7 @@ export async function getBranchesForSession(
 
         // 警告は1回だけ
         if (currentBranch && !remoteBranches.includes(currentBranch)) {
-            outputChannel.appendLine(`[Jules] Warning: Current branch "${currentBranch}" not found on remote`);
+            outputChannel.appendLine(`[Jules] Warning: Current branch "${sanitizeForLogging(currentBranch)}" not found on remote`);
             branches.unshift(currentBranch);
         }
 
