@@ -274,7 +274,7 @@ async function createRemoteBranch(
     if (!response.ok) {
       // Read the response as text so we can handle non-JSON errors robustly
       const respText = await response.text();
-      logger.appendLine(`[Jules] GitHub API error response: ${respText}`);
+      logger.appendLine(`[Jules] GitHub API error response: ${sanitizeForLogging(respText)}`);
       let errMsg = 'Unknown error';
       try {
         const parsed = JSON.parse(respText);

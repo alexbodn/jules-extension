@@ -93,4 +93,11 @@ suite("Security Utils Test Suite", () => {
         const result = sanitizeForLogging(input);
         assert.strictEqual(result, expected);
     });
+
+    test("sanitizeForLogging should strip ANSI escape codes", () => {
+        const input = "\u001b[31mRed Error\u001b[0m";
+        const expected = "Red Error";
+        const result = sanitizeForLogging(input);
+        assert.strictEqual(result, expected);
+    });
 });
