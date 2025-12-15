@@ -57,7 +57,7 @@ export function sanitizeForLogging(value: unknown, maxLength: number = 500): str
     let str = String(value);
 
     // Strip ANSI escape codes
-    str = str.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '');
+    str = str.replace(/\x1B(?:].*?(?:\x07|\x1B\\)|\[[0-?]*[ -/]*[@-~]|[@-Z\\-_])/g, '');
 
     // Truncate if too long, ensuring the result is not longer than maxLength
     if (str.length > maxLength) {
