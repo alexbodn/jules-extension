@@ -49,12 +49,15 @@ export function stripUrlCredentials(url: string): string {
  * @returns Sanitized string
  */
 export function sanitizeForLogging(value: unknown, maxLength: number = 500): string {
-    if (value == null) {
+    if (value === null || value === undefined) {
         return String(value);
     }
 
     // Convert to string in case it's not
     let str = String(value);
+
+    // Strip ANSI escape codes
+    str = str.replace(/\x1B(?:].*?(?:\x07|\x1B\\)|\[[0-?]*[ -/]*[@-~]|[@-Z\\-_])/g, '');
 
     // Truncate if too long, ensuring the result is not longer than maxLength
     if (str.length > maxLength) {
