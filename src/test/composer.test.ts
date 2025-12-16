@@ -122,5 +122,16 @@ suite("Composer Test Suite", () => {
       assert.ok(html.includes('accent-color: var(--vscode-button-background)'));
       assert.ok(html.includes('input[type="checkbox"]:focus-visible'));
     });
+
+    test("should include validation logic", () => {
+      const html = getComposerHtml(
+        mockWebview,
+        { title: "Test" },
+        "nonce-123"
+      );
+      assert.ok(html.includes('button:disabled'));
+      assert.ok(html.includes('submitButton.disabled = !isValid'));
+      assert.ok(html.includes("textarea.addEventListener('input', validate)"));
+    });
   });
 });
