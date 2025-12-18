@@ -2739,7 +2739,6 @@ export function activate(context: vscode.ExtensionContext) {
     "jules-extension.openInWebApp",
     (item?: SessionTreeItem) => handleOpenInWebApp(item, logChannel)
   );
-
   context.subscriptions.push(
     setApiKeyDisposable,
     verifyApiKeyDisposable,
