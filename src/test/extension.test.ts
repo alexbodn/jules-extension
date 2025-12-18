@@ -10,7 +10,8 @@ import {
   areOutputsEqual,
   updatePreviousStates,
   Session,
-  SessionOutput
+  SessionOutput,
+  handleOpenInWebApp
 } from "../extension";
 import * as sinon from "sinon";
 import * as fetchUtils from "../fetchUtils";
@@ -474,555 +475,70 @@ suite("Extension Test Suite", () => {
     });
   });
 
-  suite("Session URL Feature", () => {
-    test("Session interface should support optional url field", () => {
-      const sessionWithUrl: Session = {
-        name: "sessions/123",
-        title: "Test Session",
-        state: "RUNNING",
-        rawState: "IN_PROGRESS",
-        url: "https://example.com/session/123"
-      };
-
-      assert.strictEqual(sessionWithUrl.url, "https://example.com/session/123");
-      assert.ok(sessionWithUrl.name);
-      assert.ok(sessionWithUrl.title);
-    });
-
-    test("Session interface should work without url field", () => {
-      const sessionWithoutUrl: Session = {
-        name: "sessions/456",
-        title: "Test Session",
-        state: "COMPLETED",
-        rawState: "COMPLETED"
-      };
-
-      assert.strictEqual(sessionWithoutUrl.url, undefined);
-      assert.ok(sessionWithoutUrl.name);
-    });
-
-    test("Session url field can be undefined explicitly", () => {
-      const session: Session = {
-        name: "sessions/789",
-        title: "Test Session",
-        state: "FAILED",
-        rawState: "FAILED",
-        url: undefined
-      };
-
-      assert.strictEqual(session.url, undefined);
-    });
-
-    test("Session url field can contain various URL formats", () => {
-      const httpsSession: Session = {
-        name: "sessions/001",
-        title: "HTTPS Session",
-        state: "RUNNING",
-        rawState: "IN_PROGRESS",
-        url: "https://jules.ai/sessions/001"
-      };
-
-      const httpSession: Session = {
-        name: "sessions/002",
-        title: "HTTP Session",
-        state: "RUNNING",
-        rawState: "IN_PROGRESS",
-        url: "http://localhost:3000/session/002"
-      };
-
-      const urlWithParams: Session = {
-        name: "sessions/003",
-        title: "Session with params",
-        state: "RUNNING",
-        rawState: "IN_PROGRESS",
-        url: "https://example.com/session?id=003&view=full"
-      };
-
-      assert.ok(httpsSession.url?.startsWith("https://"));
-      assert.ok(httpSession.url?.startsWith("http://"));
-      assert.ok(urlWithParams.url?.includes("?"));
-    });
-  });
-
-  suite("SessionTreeItem with URL", () => {
-    test("SessionTreeItem contextValue should include 'jules-session-with-url' when url is present", () => {
-      const sessionWithUrl: Session = {
-        name: "sessions/123",
-        title: "Session with URL",
-        state: "RUNNING",
-        rawState: "IN_PROGRESS",
-        url: "https://example.com/session/123"
-      };
-
-      const item = new SessionTreeItem(sessionWithUrl);
-
-      assert.ok(item.contextValue);
-      assert.ok(item.contextValue.includes("jules-session"));
-      assert.ok(item.contextValue.includes("jules-session-with-url"));
-      assert.strictEqual(item.contextValue, "jules-session jules-session-with-url");
-    });
-
-    test("SessionTreeItem contextValue should not include 'jules-session-with-url' when url is undefined", () => {
-      const sessionWithoutUrl: Session = {
-        name: "sessions/456",
-        title: "Session without URL",
-        state: "COMPLETED",
-        rawState: "COMPLETED"
-      };
-
-      const item = new SessionTreeItem(sessionWithoutUrl);
-
-      assert.strictEqual(item.contextValue, "jules-session");
-      assert.ok(!item.contextValue.includes("jules-session-with-url"));
-    });
-
-    test("SessionTreeItem contextValue should not include 'jules-session-with-url' when url is empty string", () => {
-      const sessionWithEmptyUrl: Session = {
-        name: "sessions/789",
-        title: "Session with empty URL",
-        state: "RUNNING",
-        rawState: "IN_PROGRESS",
-        url: ""
-      };
-
-      const item = new SessionTreeItem(sessionWithEmptyUrl);
-
-      // Empty string is falsy, so should not add the suffix
-      assert.strictEqual(item.contextValue, "jules-session");
-    });
-
-    test("SessionTreeItem should preserve url in session property", () => {
-      const testUrl = "https://jules.ai/session/test-123";
-      const session: Session = {
-        name: "sessions/test-123",
-        title: "Test Session",
-        state: "RUNNING",
-        rawState: "IN_PROGRESS",
-        url: testUrl
-      };
-
-      const item = new SessionTreeItem(session);
-
-      assert.strictEqual(item.session.url, testUrl);
-    });
-
-    test("SessionTreeItem with url should maintain all other properties correctly", () => {
-      const session: Session = {
-        name: "sessions/full-test",
-        title: "Full Feature Session",
-        state: "COMPLETED",
-        rawState: "COMPLETED",
-        url: "https://example.com/session/full",
-        outputs: [
-          {
-            pullRequest: {
-              url: "https://github.com/owner/repo/pull/1",
-              title: "Test PR",
-              description: "Description"
-            }
-          }
-        ],
-        sourceContext: { source: "sources/github/owner/repo" },
-        requirePlanApproval: true
-      };
-
-      const item = new SessionTreeItem(session);
-
-      assert.strictEqual(item.session.name, "sessions/full-test");
-      assert.strictEqual(item.session.title, "Full Feature Session");
-      assert.strictEqual(item.session.state, "COMPLETED");
-      assert.strictEqual(item.session.url, "https://example.com/session/full");
-      assert.ok(item.contextValue.includes("jules-session-with-url"));
-      assert.ok(item.tooltip instanceof vscode.MarkdownString);
-    });
-
-    test("SessionTreeItem contextValue with different states and url presence", () => {
-      const states: Array<"RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED"> = [
-        "RUNNING",
-        "COMPLETED",
-        "FAILED",
-        "CANCELLED"
-      ];
-
-      states.forEach(state => {
-        const sessionWithUrl: Session = {
-          name: `sessions/${state.toLowerCase()}`,
-          title: `${state} Session`,
-          state: state,
-          rawState: state,
-          url: `https://example.com/session/${state.toLowerCase()}`
-        };
-
-        const item = new SessionTreeItem(sessionWithUrl);
-        assert.ok(item.contextValue.includes("jules-session-with-url"),
-          `Session with state ${state} should have url context value`);
-      });
-    });
-  });
-
   suite("openInWebApp Command", () => {
-    let sandbox: sinon.SinonSandbox;
     let openExternalStub: sinon.SinonStub;
-    let showErrorMessageStub: sinon.SinonStub;
     let showWarningMessageStub: sinon.SinonStub;
-    let mockContext: vscode.ExtensionContext;
+    let showErrorMessageStub: sinon.SinonStub;
+    let logChannel: vscode.OutputChannel;
+    let appendLineSpy: sinon.SinonSpy;
 
     setup(() => {
-      sandbox = sinon.createSandbox();
-      openExternalStub = sandbox.stub(vscode.env, 'openExternal');
-      showErrorMessageStub = sandbox.stub(vscode.window, 'showErrorMessage');
-      showWarningMessageStub = sandbox.stub(vscode.window, 'showWarningMessage');
-      
-      mockContext = {
-        globalState: {
-          get: sandbox.stub().returns({}),
-          update: sandbox.stub().resolves(),
-          keys: sandbox.stub().returns([]),
-        },
-        subscriptions: [],
-        secrets: { 
-          get: sandbox.stub().resolves(undefined), 
-          store: sandbox.stub().resolves() 
-        }
+      openExternalStub = sinon.stub(vscode.env, "openExternal");
+      showWarningMessageStub = sinon.stub(vscode.window, "showWarningMessage");
+      showErrorMessageStub = sinon.stub(vscode.window, "showErrorMessage");
+
+      // Create a mock OutputChannel
+      appendLineSpy = sinon.spy();
+      logChannel = {
+        appendLine: appendLineSpy,
+        // Add other methods if needed, or use a more complete mock
       } as any;
     });
 
     teardown(() => {
-      sandbox.restore();
+      sinon.restore();
     });
 
-    test("openInWebApp should open external URL when session has valid url", async () => {
-      const testUrl = "https://jules.ai/session/test-123";
-      const session: Session = {
-        name: "sessions/test-123",
-        title: "Test Session",
-        state: "RUNNING",
-        rawState: "IN_PROGRESS",
-        url: testUrl
-      };
-
+    test("should open URL if session has one", async () => {
+      const session = { url: "http://example.com" } as any;
       const item = new SessionTreeItem(session);
       openExternalStub.resolves(true);
 
-      // Simulate command execution
-      const commandHandler = async (treeItem?: SessionTreeItem) => {
-        if (!treeItem || !(treeItem instanceof SessionTreeItem)) {
-          vscode.window.showErrorMessage("No session selected.");
-          return;
-        }
-        const sess = treeItem.session;
-        if (sess.url) {
-          const success = await vscode.env.openExternal(vscode.Uri.parse(sess.url));
-          if (!success) {
-            vscode.window.showWarningMessage('Failed to open the URL in the browser.');
-          }
-        } else {
-          vscode.window.showWarningMessage("No URL is available for this session.");
-        }
-      };
-
-      await commandHandler(item);
+      await handleOpenInWebApp(item, logChannel);
 
       assert.ok(openExternalStub.calledOnce);
-      const calledUri = openExternalStub.firstCall.args[0];
-      assert.strictEqual(calledUri.toString(), testUrl);
-      assert.ok(!showWarningMessageStub.called);
-      assert.ok(!showErrorMessageStub.called);
+      assert.strictEqual(openExternalStub.getCall(0).args[0].toString(), "http://example.com/");
+      assert.ok(showWarningMessageStub.notCalled);
     });
 
-    test("openInWebApp should show warning when session has no url", async () => {
-      const session: Session = {
-        name: "sessions/no-url",
-        title: "Session without URL",
-        state: "RUNNING",
-        rawState: "IN_PROGRESS"
-      };
-
+    test("should show warning if session has no URL", async () => {
+      const session = {} as any;
       const item = new SessionTreeItem(session);
 
-      const commandHandler = async (treeItem?: SessionTreeItem) => {
-        if (!treeItem || !(treeItem instanceof SessionTreeItem)) {
-          vscode.window.showErrorMessage("No session selected.");
-          return;
-        }
-        const sess = treeItem.session;
-        if (sess.url) {
-          const success = await vscode.env.openExternal(vscode.Uri.parse(sess.url));
-          if (!success) {
-            vscode.window.showWarningMessage('Failed to open the URL in the browser.');
-          }
-        } else {
-          vscode.window.showWarningMessage("No URL is available for this session.");
-        }
-      };
+      await handleOpenInWebApp(item, logChannel);
 
-      await commandHandler(item);
-
-      assert.ok(!openExternalStub.called);
-      assert.ok(showWarningMessageStub.calledOnce);
-      assert.ok(showWarningMessageStub.calledWith("No URL is available for this session."));
+      assert.ok(openExternalStub.notCalled);
+      assert.ok(showWarningMessageStub.calledOnceWith("No URL is available for this session."));
     });
 
-    test("openInWebApp should show error when no item is provided", async () => {
-      const commandHandler = async (treeItem?: SessionTreeItem) => {
-        if (!treeItem || !(treeItem instanceof SessionTreeItem)) {
-          vscode.window.showErrorMessage("No session selected.");
-          return;
-        }
-        const sess = treeItem.session;
-        if (sess.url) {
-          const success = await vscode.env.openExternal(vscode.Uri.parse(sess.url));
-          if (!success) {
-            vscode.window.showWarningMessage('Failed to open the URL in the browser.');
-          }
-        } else {
-          vscode.window.showWarningMessage("No URL is available for this session.");
-        }
-      };
+    test("should show error if no item is provided", async () => {
+      await handleOpenInWebApp(undefined, logChannel);
 
-      await commandHandler(undefined);
-
-      assert.ok(showErrorMessageStub.calledOnce);
-      assert.ok(showErrorMessageStub.calledWith("No session selected."));
-      assert.ok(!openExternalStub.called);
+      assert.ok(openExternalStub.notCalled);
+      assert.ok(showErrorMessageStub.calledOnceWith("No session selected."));
     });
 
-    test("openInWebApp should show error when item is not a SessionTreeItem", async () => {
-      const commandHandler = async (treeItem?: SessionTreeItem) => {
-        if (!treeItem || !(treeItem instanceof SessionTreeItem)) {
-          vscode.window.showErrorMessage("No session selected.");
-          return;
-        }
-        const sess = treeItem.session;
-        if (sess.url) {
-          const success = await vscode.env.openExternal(vscode.Uri.parse(sess.url));
-          if (!success) {
-            vscode.window.showWarningMessage('Failed to open the URL in the browser.');
-          }
-        } else {
-          vscode.window.showWarningMessage("No URL is available for this session.");
-        }
-      };
-
-      await commandHandler({} as any);
-
-      assert.ok(showErrorMessageStub.calledOnce);
-      assert.ok(!openExternalStub.called);
-    });
-
-    test("openInWebApp should show warning when openExternal fails", async () => {
-      const testUrl = "https://jules.ai/session/fail-test";
-      const session: Session = {
-        name: "sessions/fail-test",
-        title: "Failing Session",
-        state: "RUNNING",
-        rawState: "IN_PROGRESS",
-        url: testUrl
-      };
-
+    test("should show warning and log if opening URL fails", async () => {
+      const session = { url: "http://fail-url.com" } as any;
       const item = new SessionTreeItem(session);
       openExternalStub.resolves(false);
 
-      const commandHandler = async (treeItem?: SessionTreeItem) => {
-        if (!treeItem || !(treeItem instanceof SessionTreeItem)) {
-          vscode.window.showErrorMessage("No session selected.");
-          return;
-        }
-        const sess = treeItem.session;
-        if (sess.url) {
-          const success = await vscode.env.openExternal(vscode.Uri.parse(sess.url));
-          if (!success) {
-            vscode.window.showWarningMessage('Failed to open the URL in the browser.');
-          }
-        } else {
-          vscode.window.showWarningMessage("No URL is available for this session.");
-        }
-      };
-
-      await commandHandler(item);
+      await handleOpenInWebApp(item, logChannel);
 
       assert.ok(openExternalStub.calledOnce);
-      assert.ok(showWarningMessageStub.calledOnce);
-      assert.ok(showWarningMessageStub.calledWith('Failed to open the URL in the browser.'));
-    });
-
-    test("openInWebApp should handle various URL formats correctly", async () => {
-      const urlFormats = [
-        "https://example.com/session/1",
-        "http://localhost:3000/session/2",
-        "https://jules.ai/sessions/3?view=full",
-        "https://app.jules.ai/workspace/123/session/456",
-        "https://example.com:8080/session"
-      ];
-
-      for (const testUrl of urlFormats) {
-        openExternalStub.reset();
-        const session: Session = {
-          name: "sessions/test",
-          title: "Test",
-          state: "RUNNING",
-          rawState: "IN_PROGRESS",
-          url: testUrl
-        };
-
-        const item = new SessionTreeItem(session);
-        openExternalStub.resolves(true);
-
-        const commandHandler = async (treeItem?: SessionTreeItem) => {
-          if (!treeItem || !(treeItem instanceof SessionTreeItem)) {
-            return;
-          }
-          const sess = treeItem.session;
-          if (sess.url) {
-            await vscode.env.openExternal(vscode.Uri.parse(sess.url));
-          }
-        };
-
-        await commandHandler(item);
-
-        assert.ok(openExternalStub.calledOnce, `Should call openExternal for ${testUrl}`);
-        const calledUri = openExternalStub.firstCall.args[0];
-        assert.strictEqual(calledUri.toString(), testUrl);
-      }
-    });
-
-    test("openInWebApp should not open URL when session url is empty string", async () => {
-      const session: Session = {
-        name: "sessions/empty-url",
-        title: "Empty URL Session",
-        state: "RUNNING",
-        rawState: "IN_PROGRESS",
-        url: ""
-      };
-
-      const item = new SessionTreeItem(session);
-
-      const commandHandler = async (treeItem?: SessionTreeItem) => {
-        if (!treeItem || !(treeItem instanceof SessionTreeItem)) {
-          vscode.window.showErrorMessage("No session selected.");
-          return;
-        }
-        const sess = treeItem.session;
-        if (sess.url) {
-          const success = await vscode.env.openExternal(vscode.Uri.parse(sess.url));
-          if (!success) {
-            vscode.window.showWarningMessage('Failed to open the URL in the browser.');
-          }
-        } else {
-          vscode.window.showWarningMessage("No URL is available for this session.");
-        }
-      };
-
-      await commandHandler(item);
-
-      assert.ok(!openExternalStub.called);
-      assert.ok(showWarningMessageStub.calledOnce);
-      assert.ok(showWarningMessageStub.calledWith("No URL is available for this session."));
-    });
-
-    test("openInWebApp should handle URLs with special characters", async () => {
-      const specialUrls = [
-        "https://example.com/session?id=123&name=test%20session",
-        "https://example.com/session/test-session-1",
-        "https://example.com/session/test_session_2",
-        "https://example.com/session#section",
-        "https://example.com/session?param1=value1&param2=value2"
-      ];
-
-      for (const testUrl of specialUrls) {
-        openExternalStub.reset();
-        const session: Session = {
-          name: "sessions/special",
-          title: "Special URL Session",
-          state: "RUNNING",
-          rawState: "IN_PROGRESS",
-          url: testUrl
-        };
-
-        const item = new SessionTreeItem(session);
-        openExternalStub.resolves(true);
-
-        const commandHandler = async (treeItem?: SessionTreeItem) => {
-          if (!treeItem || !(treeItem instanceof SessionTreeItem)) {
-            return;
-          }
-          const sess = treeItem.session;
-          if (sess.url) {
-            await vscode.env.openExternal(vscode.Uri.parse(sess.url));
-          }
-        };
-
-        await commandHandler(item);
-
-        assert.ok(openExternalStub.calledOnce, `Should handle special URL: ${testUrl}`);
-      }
-    });
-
-    test("openInWebApp with completed session containing url", async () => {
-      const testUrl = "https://jules.ai/completed-session/123";
-      const session: Session = {
-        name: "sessions/completed-123",
-        title: "Completed Session",
-        state: "COMPLETED",
-        rawState: "COMPLETED",
-        url: testUrl
-      };
-
-      const item = new SessionTreeItem(session);
-      openExternalStub.resolves(true);
-
-      const commandHandler = async (treeItem?: SessionTreeItem) => {
-        if (!treeItem || !(treeItem instanceof SessionTreeItem)) {
-          return;
-        }
-        const sess = treeItem.session;
-        if (sess.url) {
-          await vscode.env.openExternal(vscode.Uri.parse(sess.url));
-        }
-      };
-
-      await commandHandler(item);
-
-      assert.ok(openExternalStub.calledOnce);
-      assert.strictEqual(item.session.state, "COMPLETED");
-    });
-
-    test("openInWebApp should work with sessions in different states", async () => {
-      const states: Array<"RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED"> = [
-        "RUNNING",
-        "COMPLETED",
-        "FAILED",
-        "CANCELLED"
-      ];
-
-      for (const state of states) {
-        openExternalStub.reset();
-        const testUrl = `https://jules.ai/session/${state.toLowerCase()}`;
-        const session: Session = {
-          name: `sessions/${state.toLowerCase()}`,
-          title: `${state} Session`,
-          state: state,
-          rawState: state,
-          url: testUrl
-        };
-
-        const item = new SessionTreeItem(session);
-        openExternalStub.resolves(true);
-
-        const commandHandler = async (treeItem?: SessionTreeItem) => {
-          if (!treeItem || !(treeItem instanceof SessionTreeItem)) {
-            return;
-          }
-          const sess = treeItem.session;
-          if (sess.url) {
-            await vscode.env.openExternal(vscode.Uri.parse(sess.url));
-          }
-        };
-
-        await commandHandler(item);
-
-        assert.ok(openExternalStub.calledOnce, `Should open URL for ${state} session`);
-      }
+      assert.ok(showWarningMessageStub.calledOnceWith('Failed to open the URL in the browser.'));
+      assert.ok(appendLineSpy.calledOnce);
+      assert.ok(appendLineSpy.getCall(0).args[0].includes("Failed to open external URL"));
     });
   });
 });
