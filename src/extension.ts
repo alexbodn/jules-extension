@@ -602,6 +602,8 @@ export function areSessionListsEqual(a: Session[], b: Session[]): boolean {
       s1.state !== s2.state ||
       s1.rawState !== s2.rawState ||
       s1.title !== s2.title ||
+      s1.requirePlanApproval !== s2.requirePlanApproval ||
+      JSON.stringify(s1.sourceContext) !== JSON.stringify(s2.sourceContext) ||
       !areOutputsEqual(s1.outputs, s2.outputs)
     ) {
       return false;

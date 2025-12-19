@@ -419,6 +419,18 @@ suite("Extension Test Suite", () => {
       const s1 = { name: "1", title: "t1", state: "RUNNING", rawState: "RUNNING", outputs: [] } as Session;
       assert.strictEqual(areSessionListsEqual([s1], []), false);
     });
+
+    test("should return false if requirePlanApproval differs", () => {
+      const s1 = { name: "1", state: "RUNNING", rawState: "RUNNING", requirePlanApproval: true } as Session;
+      const s2 = { ...s1, requirePlanApproval: false } as Session;
+      assert.strictEqual(areSessionListsEqual([s1], [s2]), false);
+    });
+
+    test("should return false if sourceContext differs", () => {
+      const s1 = { name: "1", state: "RUNNING", rawState: "RUNNING", sourceContext: { source: "a" } } as Session;
+      const s2 = { ...s1, sourceContext: { source: "b" } } as Session;
+      assert.strictEqual(areSessionListsEqual([s1], [s2]), false);
+    });
   });
 
   suite("updatePreviousStates", () => {
