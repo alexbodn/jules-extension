@@ -8,6 +8,7 @@ import {
   mapApiStateToSessionState,
   buildFinalPrompt,
   areOutputsEqual,
+  areSessionListsEqual,
   updatePreviousStates,
   Session,
   SessionOutput
@@ -398,6 +399,25 @@ suite("Extension Test Suite", () => {
       const a: SessionOutput[] = [{ pullRequest: { url: "u", title: "t", description: "d" } }];
       const b: SessionOutput[] = [{ pullRequest: { url: "u", title: "t", description: "d" } }];
       assert.strictEqual(areOutputsEqual(a, b), true);
+    });
+  });
+
+  suite("areSessionListsEqual", () => {
+    test("should return true for same sessions in different order", () => {
+      const s1 = { name: "1", title: "t1", state: "RUNNING", rawState: "RUNNING", outputs: [] } as Session;
+      const s2 = { name: "2", title: "t2", state: "COMPLETED", rawState: "COMPLETED", outputs: [] } as Session;
+      assert.strictEqual(areSessionListsEqual([s1, s2], [s2, s1]), true);
+    });
+
+    test("should return false if content differs", () => {
+      const s1 = { name: "1", title: "t1", state: "RUNNING", rawState: "RUNNING", outputs: [] } as Session;
+      const s1Modified = { ...s1, state: "COMPLETED" } as Session;
+      assert.strictEqual(areSessionListsEqual([s1], [s1Modified]), false);
+    });
+
+    test("should return false if size differs", () => {
+      const s1 = { name: "1", title: "t1", state: "RUNNING", rawState: "RUNNING", outputs: [] } as Session;
+      assert.strictEqual(areSessionListsEqual([s1], []), false);
     });
   });
 

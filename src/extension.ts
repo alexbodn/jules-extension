@@ -590,11 +590,15 @@ export function areSessionListsEqual(a: Session[], b: Session[]): boolean {
   if (a.length !== b.length) {
     return false;
   }
-  for (let i = 0; i < a.length; i++) {
-    const s1 = a[i];
-    const s2 = b[i];
+
+  const mapA = new Map(a.map((s) => [s.name, s]));
+
+  for (const s2 of b) {
+    const s1 = mapA.get(s2.name);
+    if (!s1) {
+      return false;
+    }
     if (
-      s1.name !== s2.name ||
       s1.state !== s2.state ||
       s1.rawState !== s2.rawState ||
       s1.title !== s2.title ||
