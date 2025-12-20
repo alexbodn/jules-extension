@@ -12,7 +12,7 @@ const BASE_URL = 'https://jules.secure.googleapis.com/v1alpha';
 export function registerChatParticipant(context: vscode.ExtensionContext): void {
     const participant = vscode.chat.createChatParticipant(
         PARTICIPANT_ID,
-        chatHandler
+        (request, chatContext, stream, token) => chatHandler(request, chatContext, stream, token, context)
     );
     
     // アイコン設定（icon.pngがある場合）
@@ -27,13 +27,14 @@ export function registerChatParticipant(context: vscode.ExtensionContext): void 
  */
 async function chatHandler(
     request: vscode.ChatRequest,
-    context: vscode.ChatContext,
+    chatContext: vscode.ChatContext,
     stream: vscode.ChatResponseStream,
-    token: vscode.CancellationToken
+    token: vscode.CancellationToken,
+    extensionContext: vscode.ExtensionContext
 ): Promise<vscode.ChatResult> {
     
     // API Keyの取得
-    const apiKey = vscode.workspace.getConfiguration('jules-extension').get<string>('apiKey');
+    const apiKey = await extensionContext.secrets.get('julius-api-key');
     if (!apiKey) {
         stream.markdown('⚠️ API Keyが設定されていません。\n\n');
         stream.markdown('設定から `jules-extension.apiKey` を設定するか、コマンドパレットから **Jules: Set Jules API Key** を実行してください。');
