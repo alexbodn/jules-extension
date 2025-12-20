@@ -21,3 +21,15 @@ export interface Source {
 export interface SourcesResponse {
     sources: Source[];
 }
+
+export interface Activity {
+    name: string;
+    createTime: string;
+    originator: "user" | "agent";
+    id: string;
+    type?: string;
+    userPrompt?: { text: string };
+    thought?: { text: string };
+    planGenerated?: { plan: { steps?: { description: string }[] } };
+    outputGenerated?: { output: string };
+}

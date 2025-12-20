@@ -39,6 +39,24 @@
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
+    "chatParticipants": [
+      {
+        "id": "jules-extension.jules",
+        "name": "jules",
+        "description": "Interact with Jules AI coding agent sessions",
+        "isSticky": true,
+        "commands": [
+          {
+            "name": "list",
+            "description": "List all Jules sessions"
+          },
+          {
+            "name": "session",
+            "description": "Show session details and activity history"
+          }
+        ]
+      }
+    ],
     "configuration": {
       "title": "Jules Extension",
       "properties": {

@@ -14,6 +14,7 @@ const execAsync = promisify(exec);
 import { SourcesCache, isCacheValid } from './cache';
 import { stripUrlCredentials, sanitizeForLogging } from './securityUtils';
 import { fetchWithTimeout } from './fetchUtils';
+import { registerChatParticipant } from './chatParticipant';
 
 // Constants
 const JULES_API_BASE_URL = "https://jules.googleapis.com/v1alpha";
@@ -1365,6 +1366,9 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
   context.subscriptions.push(signInDisposable);
+
+  // Chat Participant 登録
+  registerChatParticipant(context);
 
   const setApiKeyDisposable = vscode.commands.registerCommand(
     "jules-extension.setApiKey",
