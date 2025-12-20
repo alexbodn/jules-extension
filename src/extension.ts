@@ -2,9 +2,21 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from "vscode";
 import { JulesApiClient } from './julesApiClient';
-import { GitHubBranch, GitHubRepo, Source as SourceType, SourcesResponse } from './types';
+import {
+  GitHubBranch,
+  GitHubRepo,
+  Source as SourceType,
+  SourcesResponse,
+  Session,
+  Activity,
+  ActivitiesResponse,
+  Plan,
+  PlanStep,
+  SessionOutput
+} from './types';
 import { getBranchesForSession } from './branchUtils';
 import { showMessageComposer } from './composer';
+import { showChatPanel } from './chatPanel';
 import { parseGitHubUrl } from "./githubUtils";
 import { GitHubAuth } from './githubAuth';
 import { promisify } from 'util';
@@ -16,7 +28,7 @@ import { stripUrlCredentials, sanitizeForLogging } from './securityUtils';
 import { fetchWithTimeout } from './fetchUtils';
 
 // Constants
-const JULES_API_BASE_URL = "https://jules.googleapis.com/v1alpha";
+export const JULES_API_BASE_URL = "https://jules.googleapis.com/v1alpha";
 const VIEW_DETAILS_ACTION = 'View Details';
 const SHOW_ACTIVITIES_COMMAND = 'jules-extension.showActivities';
 
@@ -60,27 +72,6 @@ interface CreateSessionRequest {
 interface SessionResponse {
   name: string;
   // Add other fields if needed
-}
-
-export interface SessionOutput {
-  pullRequest?: {
-    url: string;
-    title: string;
-    description: string;
-  };
-}
-
-export interface Session {
-  name: string;
-  title: string;
-  state: "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED";
-  rawState: string;
-  url?: string;
-  outputs?: SessionOutput[];
-  sourceContext?: {
-    source: string;
-  };
-  requirePlanApproval?: boolean; // ⭐ NEW
 }
 
 export function mapApiStateToSessionState(
@@ -143,7 +134,7 @@ let isFetchingSensitiveData = false;
 
 // Helper functions
 
-async function getStoredApiKey(
+export async function getStoredApiKey(
   context: vscode.ExtensionContext
 ): Promise<string | undefined> {
   const apiKey = await context.secrets.get("jules-api-key");
@@ -770,47 +761,6 @@ function resetAutoRefresh(
 
 interface SessionsResponse {
   sessions: Session[];
-}
-
-interface PlanStep {
-  description: string;
-}
-
-interface Plan {
-  title?: string;
-  steps?: PlanStep[];
-}
-
-interface Activity {
-  name: string;
-  createTime: string;
-  originator: "user" | "agent";
-  id: string;
-  type?: string;
-  planGenerated?: { plan: Plan };
-  planApproved?: { planId: string };
-  progressUpdated?: { title: string; description?: string };
-  sessionCompleted?: Record<string, never>;
-}
-
-interface ActivitiesResponse {
-  activities: Activity[];
-}
-
-function getActivityIcon(activity: Activity): string {
-  if (activity.planGenerated) {
-    return "📝";
-  }
-  if (activity.planApproved) {
-    return "👍";
-  }
-  if (activity.progressUpdated) {
-    return "🔄";
-  }
-  if (activity.sessionCompleted) {
-    return "✅";
-  }
-  return "ℹ️";
 }
 
 export class JulesSessionsProvider
@@ -1780,39 +1730,8 @@ export function activate(context: vscode.ExtensionContext) {
           vscode.window.showErrorMessage("Invalid response format from API.");
           return;
         }
-        activitiesChannel.clear();
-        activitiesChannel.show();
-        activitiesChannel.appendLine(`Activities for session: ${sessionId}`);
-        activitiesChannel.appendLine("---");
-        if (data.activities.length === 0) {
-          activitiesChannel.appendLine("No activities found for this session.");
-        } else {
-          let planDetected = false;
-          data.activities.forEach((activity) => {
-            const icon = getActivityIcon(activity);
-            const timestamp = new Date(activity.createTime).toLocaleString();
-            let message = "";
-            if (activity.planGenerated) {
-              message = `Plan generated: ${activity.planGenerated.plan?.title || "Plan"
-                }`;
-              planDetected = true;
-            } else if (activity.planApproved) {
-              message = `Plan approved: ${activity.planApproved.planId}`;
-            } else if (activity.progressUpdated) {
-              message = `Progress: ${activity.progressUpdated.title}${activity.progressUpdated.description
-                ? " - " + activity.progressUpdated.description
-                : ""
-                }`;
-            } else if (activity.sessionCompleted) {
-              message = "Session completed";
-            } else {
-              message = "Unknown activity";
-            }
-            activitiesChannel.appendLine(
-              `${icon} ${timestamp} (${activity.originator}): ${message}`
-            );
-          });
-        }
+        
+        await showChatPanel(context, session, data.activities);
         await context.globalState.update("active-session-id", sessionId);
       } catch (error) {
         vscode.window.showErrorMessage(

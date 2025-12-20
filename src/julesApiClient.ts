@@ -1,4 +1,4 @@
-import { Source as SourceType } from './types';
+import { Source as SourceType, Session, Activity } from './types';
 import { fetchWithTimeout } from './fetchUtils';
 
 export class JulesApiClient {
@@ -30,5 +30,21 @@ export class JulesApiClient {
 
     async getSource(sourceName: string): Promise<SourceType> {
         return this.request<SourceType>(`/${sourceName}`);
+    }
+
+    async getSession(sessionId: string): Promise<Session> {
+        return this.request<Session>(`/sessions/${sessionId}`);
+    }
+
+    async getActivities(sessionId: string): Promise<Activity[]> {
+        const response = await this.request<{ activities: Activity[] }>(`/sessions/${sessionId}/activities`);
+        return response.activities || [];
+    }
+
+    async sendMessage(sessionId: string, text: string): Promise<void> {
+        await this.request<void>(`/sessions/${sessionId}:sendMessage`, {
+            method: 'POST',
+            body: JSON.stringify({ message: text }),
+        });
     }
 }

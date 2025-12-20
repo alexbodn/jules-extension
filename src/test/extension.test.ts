@@ -10,10 +10,9 @@ import {
   areOutputsEqual,
   areSessionListsEqual,
   updatePreviousStates,
-  Session,
-  SessionOutput,
   handleOpenInWebApp
 } from "../extension";
+import { Session, SessionOutput } from "../types";
 import * as sinon from "sinon";
 import * as fetchUtils from "../fetchUtils";
 import { activate } from "../extension";
