@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as crypto from 'crypto';
 import { Session, Activity } from './types';
 import { JulesApiClient } from './julesApiClient';
 import { getStoredApiKey, JULES_API_BASE_URL } from './extension';
@@ -21,13 +22,15 @@ export async function showChatPanel(
 
     panel.webview.html = getChatPanelHtml(panel.webview, context.extensionUri, session, activities);
 
-    const apiKey = await getStoredApiKey(context);
-    const client = apiKey ? new JulesApiClient(apiKey, JULES_API_BASE_URL) : undefined;
-
     const pollInterval = setInterval(async () => {
-        if (!client || !panel.visible) {
+        if (!panel.visible) {
             return;
         }
+        const apiKey = await getStoredApiKey(context);
+        if (!apiKey) {
+            return;
+        }
+        const client = new JulesApiClient(apiKey, JULES_API_BASE_URL);
         try {
             const updatedActivities = await client.getActivities(session.name);
             panel.webview.postMessage({
@@ -46,7 +49,7 @@ export async function showChatPanel(
     panel.webview.onDidReceiveMessage(
         async (message) => {
             switch (message.command) {
-                case 'sendMessage':
+                case 'sendMessage': {
                     const apiKey = await getStoredApiKey(context);
                     if (!apiKey) {
                         return;
@@ -60,6 +63,7 @@ export async function showChatPanel(
                         vscode.window.showErrorMessage(`Failed to send message: ${error}`);
                     }
                     break;
+                }
                 case 'approvePlan':
                     vscode.commands.executeCommand('jules-extension.approvePlan');
                     break;
@@ -204,7 +208,13 @@ function getChatPanelHtml(webview: vscode.Webview, extensionUri: vscode.Uri, ses
                     
                     const header = document.createElement('div');
                     header.className = 'activity-header';
-                    header.innerHTML = \`<span>\${getActivityIcon(activity)}</span> <span>\${new Date(activity.createTime).toLocaleTimeString()}</span>\`;
+                    const iconSpan = document.createElement('span');
+                    iconSpan.textContent = getActivityIcon(activity);
+                    const timeSpan = document.createElement('span');
+                    timeSpan.textContent = new Date(activity.createTime).toLocaleTimeString();
+                    header.appendChild(iconSpan);
+                    header.appendChild(document.createTextNode(' '));
+                    header.appendChild(timeSpan);
                     item.appendChild(header);
 
                     const content = document.createElement('div');
@@ -213,14 +223,24 @@ function getChatPanelHtml(webview: vscode.Webview, extensionUri: vscode.Uri, ses
                     if (activity.userPrompt) {
                         content.textContent = activity.userPrompt.text;
                     } else if (activity.thought) {
-                        content.innerHTML = \`<em>Thought: \${activity.thought.text}</em>\`;
+                        const em = document.createElement('em');
+                        em.textContent = 'Thought: ' + activity.thought.text;
+                        content.appendChild(em);
                     } else if (activity.planGenerated) {
-                        content.innerHTML = \`
-                            <strong>Plan generated: \${activity.planGenerated.plan?.title || 'Plan'}</strong>
-                            <ul>
-                                \${activity.planGenerated.plan?.steps?.map(step => \`<li>\${step.description}</li>\`).join('') || ''}
-                            </ul>
-                        \`;
+                        const strong = document.createElement('strong');
+                        strong.textContent = 'Plan generated: ' + (activity.planGenerated.plan?.title || 'Plan');
+                        content.appendChild(strong);
+                        
+                        if (activity.planGenerated.plan?.steps && activity.planGenerated.plan.steps.length > 0) {
+                            const ul = document.createElement('ul');
+                            activity.planGenerated.plan.steps.forEach(step => {
+                                const li = document.createElement('li');
+                                li.textContent = step.description;
+                                ul.appendChild(li);
+                            });
+                            content.appendChild(ul);
+                        }
+                        
                         if (activity.planGenerated.plan?.state === 'PROPOSED') {
                             const approveBtn = document.createElement('button');
                             approveBtn.className = 'approve-button';
@@ -229,14 +249,24 @@ function getChatPanelHtml(webview: vscode.Webview, extensionUri: vscode.Uri, ses
                             content.appendChild(approveBtn);
                         }
                     } else if (activity.planApproved) {
-                        content.textContent = \`Plan approved: \${activity.planApproved.planId}\`;
+                        content.textContent = 'Plan approved: ' + activity.planApproved.planId;
                     } else if (activity.progressUpdated) {
-                        content.innerHTML = \`
-                            <strong>\${activity.progressUpdated.title}</strong>
-                            \${activity.progressUpdated.description ? \`<p>\${activity.progressUpdated.description}</p>\` : ''}
-                        \`;
+                        const strong = document.createElement('strong');
+                        strong.textContent = activity.progressUpdated.title;
+                        content.appendChild(strong);
+                        if (activity.progressUpdated.description) {
+                            const p = document.createElement('p');
+                            p.textContent = activity.progressUpdated.description;
+                            content.appendChild(p);
+                        }
                     } else if (activity.outputGenerated) {
-                        content.innerHTML = \`<strong>Output:</strong><br>\${activity.outputGenerated.output}\`;
+                        const strong = document.createElement('strong');
+                        strong.textContent = 'Output:';
+                        content.appendChild(strong);
+                        content.appendChild(document.createElement('br'));
+                        const outputText = document.createElement('span');
+                        outputText.textContent = activity.outputGenerated.output;
+                        content.appendChild(outputText);
                     } else if (activity.sessionCompleted) {
                         content.textContent = 'Session completed';
                     } else {
@@ -290,10 +320,5 @@ function getChatPanelHtml(webview: vscode.Webview, extensionUri: vscode.Uri, ses
 }
 
 function getNonce() {
-    let text = '';
-    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    for (let i = 0; i < 32; i++) {
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
-    }
-    return text;
+    return crypto.randomBytes(16).toString('hex');
 }

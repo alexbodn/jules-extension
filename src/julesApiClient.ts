@@ -44,7 +44,7 @@ export class JulesApiClient {
     async sendMessage(sessionId: string, text: string): Promise<void> {
         await this.request<void>(`/sessions/${sessionId}:sendMessage`, {
             method: 'POST',
-            body: JSON.stringify({ message: text }),
+            body: JSON.stringify({ prompt: text }),
         });
     }
 }

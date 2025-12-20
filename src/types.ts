@@ -29,6 +29,7 @@ export interface PlanStep {
 export interface Plan {
     title?: string;
     steps?: PlanStep[];
+    state?: string;
 }
 
 export interface Activity {
@@ -37,9 +38,12 @@ export interface Activity {
     originator: "user" | "agent";
     id: string;
     type?: string;
+    userPrompt?: { text: string };
+    thought?: { text: string };
     planGenerated?: { plan: Plan };
     planApproved?: { planId: string };
     progressUpdated?: { title: string; description?: string };
+    outputGenerated?: { output: string };
     sessionCompleted?: Record<string, never>;
 }
 
