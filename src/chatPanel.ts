@@ -3,6 +3,14 @@ import { Session, Activity } from './types';
 import { JulesApiClient } from './julesApiClient';
 import { getStoredApiKey, JULES_API_BASE_URL } from './extension';
 
+/**
+ * Open a chat webview for a session, render the provided activities, and keep the view synchronized with remote activity updates.
+ *
+ * The panel polls the Jules API (when an API key is stored) for activity updates every 5 seconds while visible, forwards updates to the webview, and handles messages from the webview to send user messages or trigger plan approval. The polling interval is cleared when the panel is disposed.
+ *
+ * @param session - The session to display (used for panel title and API requests)
+ * @param activities - Initial list of activities to render in the chat panel
+ */
 export async function showChatPanel(
     context: vscode.ExtensionContext,
     session: Session,
@@ -70,6 +78,15 @@ export async function showChatPanel(
     );
 }
 
+/**
+ * Generate the HTML content used for the Jules chat webview panel.
+ *
+ * @param webview - The VS Code webview instance used to construct CSP sources.
+ * @param extensionUri - The extension's URI (used to resolve local resources if needed).
+ * @param session - The session metadata used to personalize the panel (e.g., title).
+ * @param initialActivities - The initial list of activities to render in the chat timeline.
+ * @returns The complete HTML string to set as the webview's content for the chat panel.
+ */
 function getChatPanelHtml(webview: vscode.Webview, extensionUri: vscode.Uri, session: Session, initialActivities: Activity[]): string {
     const nonce = getNonce();
 
@@ -289,6 +306,11 @@ function getChatPanelHtml(webview: vscode.Webview, extensionUri: vscode.Uri, ses
     </html>`;
 }
 
+/**
+ * Generates a 32-character alphanumeric nonce suitable for use in CSP nonces and similar contexts.
+ *
+ * @returns A 32-character string containing uppercase letters, lowercase letters, and digits.
+ */
 function getNonce() {
     let text = '';
     const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';

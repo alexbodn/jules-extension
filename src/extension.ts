@@ -74,6 +74,12 @@ interface SessionResponse {
   // Add other fields if needed
 }
 
+/**
+ * Map a Jules API session state string to the extension's internal session state.
+ *
+ * @param apiState - The session state value returned by the Jules API (for example `"PLANNING"`, `"COMPLETED"`, `"FAILED"`, `"CANCELLED"`)
+ * @returns `"RUNNING"` if the API state represents an in-progress or unspecified state, `"COMPLETED"` if finished successfully, `"FAILED"` if finished with an error, or `"CANCELLED"` if paused or cancelled.
+ */
 export function mapApiStateToSessionState(
   apiState: string
 ): "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED" {
@@ -132,7 +138,13 @@ function loadPreviousSessionStates(context: vscode.ExtensionContext): void {
 let autoRefreshInterval: NodeJS.Timeout | undefined;
 let isFetchingSensitiveData = false;
 
-// Helper functions
+/**
+ * Retrieves the stored Jules API key from the extension secrets storage.
+ *
+ * If no key is found, displays an error message prompting the user to set the API key.
+ *
+ * @returns The stored API key, or `undefined` if none was found.
+ */
 
 export async function getStoredApiKey(
   context: vscode.ExtensionContext
@@ -1253,7 +1265,13 @@ export async function handleOpenInWebApp(item: SessionTreeItem | undefined, logC
 }
 
 // This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
+/**
+ * Initialize and activate the Jules VS Code extension: restore caches and state, create UI (tree view, status bar, output channels), register commands and event listeners, and start the background auto-refresh.
+ *
+ * This performs startup tasks such as loading the PR status cache and previous session states, creating the Jules sessions TreeView and status bar item, setting up output channels and GitHub sign-in, registering all extension commands (sources listing, session creation, refresh, activities, messaging, plan approval, token management, cache clearing, open-in-web-app, etc.), and initiating the initial and periodic session refresh cycles.
+ *
+ * @param context - The extension activation context used for persisting global state, storing secrets, and registering disposables/subscriptions.
+ */
 export function activate(context: vscode.ExtensionContext) {
   console.log("Jules Extension is now active");
 
@@ -1989,4 +2007,3 @@ export function activate(context: vscode.ExtensionContext) {
 export function deactivate() {
   stopAutoRefresh();
 }
-
