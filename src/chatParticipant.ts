@@ -1,8 +1,13 @@
 import * as vscode from 'vscode';
 import { fetchWithTimeout } from './fetchUtils';
 
+<<<<<<< HEAD
 const PARTICIPANT_ID = 'julius-extension.julius';
 const JULIUS_API_BASE_URL = "https://julius.googleapis.com/v1alpha";
+=======
+const PARTICIPANT_ID = 'jules-extension.jules';
+const JULIUS_API_BASE_URL = "https://jules.googleapis.com/v1alpha";
+>>>>>>> d1003b5 (feat: Implement Chat Participant API with direct API calls)
 
 interface Activity {
   name: string;
@@ -48,7 +53,11 @@ async function chatHandler(
   extensionContext: vscode.ExtensionContext
 ): Promise<vscode.ChatResult> {
   
+<<<<<<< HEAD
   const apiKey = await extensionContext.secrets.get('julius-api-key');
+=======
+  const apiKey = await extensionContext.secrets.get('jules-api-key');
+>>>>>>> d1003b5 (feat: Implement Chat Participant API with direct API calls)
   if (!apiKey) {
     stream.markdown('⚠️ API Keyが設定されていません。\n\n');
     stream.markdown('コマンドパレットから **Jules: Set Jules API Key** を実行してください。');
