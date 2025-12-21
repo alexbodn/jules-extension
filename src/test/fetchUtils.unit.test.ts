@@ -40,14 +40,14 @@ suite('FetchUtils ユニットテスト', () => {
         let capturedSignal: AbortSignal | undefined;
         fetchStub.callsFake((url, options) => {
             capturedSignal = options?.signal as AbortSignal;
-            return new Promise((resolve, reject) => {
+            return new Promise((_resolve, reject) => {
                  // 即座に中断されているかチェック
                  if (capturedSignal?.aborted) {
-                     return reject(new Error('AbortError'));
+                     return reject(capturedSignal!.reason);
                  }
                  // 将来の中断をリッスン
                  capturedSignal?.addEventListener('abort', () => {
-                     reject(new Error('AbortError'));
+                     reject(capturedSignal!.reason);
                  });
             });
         });
@@ -70,6 +70,6 @@ suite('FetchUtils ユニットテスト', () => {
 
         assert.strictEqual(capturedSignal.aborted, true, 'タイムアウト後にシグナルが中断されるべき');
 
-        await assert.rejects(promise, /AbortError/);
+        await assert.rejects(promise, /Timeout/);
     });
 });
