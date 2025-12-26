@@ -1,6 +1,11 @@
 import { Source as SourceType } from './types';
 import { fetchWithTimeout } from './fetchUtils';
 
+export interface ApiResponse<T> {
+    body: T;
+    headers: Headers;
+}
+
 export class JulesApiClient {
     private baseUrl: string;
     private apiKey: string;
@@ -10,7 +15,7 @@ export class JulesApiClient {
         this.apiKey = apiKey;
     }
 
-    private async request<T>(endpoint: string, options?: RequestInit & { timeout?: number }): Promise<T> {
+    private async request<T>(endpoint: string, options?: RequestInit & { timeout?: number }): Promise<ApiResponse<T>> {
         const url = `${this.baseUrl}${endpoint}`;
         const response = await fetchWithTimeout(url, {
             ...options,
@@ -25,10 +30,11 @@ export class JulesApiClient {
             throw new Error(`API request failed: ${response.status} ${response.statusText}`);
         }
 
-        return response.json() as Promise<T>;
+        const body = await response.json() as T;
+        return { body, headers: response.headers };
     }
 
-    async getSource(sourceName: string): Promise<SourceType> {
+    async getSource(sourceName: string): Promise<ApiResponse<SourceType>> {
         return this.request<SourceType>(`/${sourceName}`);
     }
 }

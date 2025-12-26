@@ -4,6 +4,7 @@ import * as assert from "assert";
 // as well as import your extension to test it
 import * as vscode from "vscode";
 import {
+  JulesSessionsProvider,
   SessionTreeItem,
   mapApiStateToSessionState,
   buildFinalPrompt,
@@ -257,7 +258,11 @@ suite("Extension Test Suite", () => {
       const consoleLogStub = localSandbox.stub(console, 'log');
 
       // Stub fetch so we can observe calls for expired entry
-      const fetchStub = localSandbox.stub(fetchUtils, 'fetchWithTimeout').resolves({ ok: true, json: async () => ({ state: 'open' }) } as any);
+      const fetchStub = localSandbox.stub(fetchUtils, 'fetchWithTimeout').resolves({
+        ok: true,
+        json: async () => ({ state: 'open' }),
+        headers: new Headers(),
+       } as any);
 
       // Prevent duplicate command registration errors during test
       const registerCmdStub = localSandbox.stub(vscode.commands, 'registerCommand').callsFake(() => ({ dispose: () => {} } as any));
@@ -312,7 +317,7 @@ suite("Extension Test Suite", () => {
         },
       } as any;
 
-      fetchStub = sandbox.stub(global, 'fetch');
+      fetchStub = sandbox.stub(fetchUtils, 'fetchWithTimeout');
     });
 
     teardown(() => {
@@ -402,6 +407,46 @@ suite("Extension Test Suite", () => {
       assert.strictEqual(areOutputsEqual(a, b), true);
     });
   });
+
+  suite("JulesSessionsProvider Test Suite", () => {
+    let sandbox: sinon.SinonSandbox;
+    let mockContext: vscode.ExtensionContext;
+    let fetchStub: sinon.SinonStub;
+
+    setup(() => {
+        sandbox = sinon.createSandbox();
+        mockContext = {
+            globalState: {
+                get: sandbox.stub().returns({}),
+                update: sandbox.stub().resolves(),
+            },
+        } as any;
+        fetchStub = sandbox.stub(fetchUtils, 'fetchWithTimeout');
+    });
+
+    teardown(() => {
+        sandbox.restore();
+    });
+
+    test('getChildren should return empty array when no source selected', async () => {
+        (mockContext.globalState.get as sinon.SinonStub).withArgs('selected-source').returns(undefined);
+        const provider = new (JulesSessionsProvider as any)(mockContext);
+        const children = await provider.getChildren();
+        assert.deepStrictEqual(children, []);
+    });
+
+    test('getChildren should return empty array when source selected but no sessions found', async () => {
+        (mockContext.globalState.get as sinon.SinonStub).withArgs('selected-source').returns({ name: 'test-source' });
+        fetchStub.resolves({
+            ok: true,
+            json: async () => ({ sessions: [] }),
+            headers: new Headers(),
+        });
+        const provider = new (JulesSessionsProvider as any)(mockContext);
+        const children = await provider.getChildren();
+        assert.deepStrictEqual(children, []);
+    });
+});
 
   suite("areSessionListsEqual", () => {
     test("should return true for same sessions in different order", () => {

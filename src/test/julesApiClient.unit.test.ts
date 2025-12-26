@@ -22,11 +22,13 @@ suite('JulesApiClient Test Suite', () => {
 
     suite('getSource', () => {
         test('should make correct request', async () => {
+            const mockHeaders = { 'x-test': 'value' };
             const mockResponse = {
                 ok: true,
-                json: async () => ({ id: 'source-1' })
+                json: async () => ({ id: 'source-1' }),
+                headers: mockHeaders,
             };
-            fetchStub.resolves(mockResponse);
+            fetchStub.resolves(mockResponse as any);
 
             const result = await client.getSource('source-1');
 
@@ -35,7 +37,8 @@ suite('JulesApiClient Test Suite', () => {
             assert.strictEqual(url, `${baseUrl}/source-1`);
             assert.strictEqual(options.headers['X-Goog-Api-Key'], apiKey);
             assert.strictEqual(options.headers['Content-Type'], 'application/json');
-            assert.deepStrictEqual(result, { id: 'source-1' });
+            assert.deepStrictEqual(result.body, { id: 'source-1' });
+            assert.strictEqual(result.headers, mockHeaders);
         });
 
         test('should throw error on API failure', async () => {

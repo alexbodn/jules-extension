@@ -288,7 +288,7 @@ You can push this branch first, or use the default branch "${'main'}" instead.`,
             };
 
             apiClient = {
-                getSource: sandbox.stub().resolves(selectedSource)
+                getSource: sandbox.stub().resolves({ body: selectedSource, headers: new Headers() })
             } as unknown as JulesApiClient;
 
             const gitApi = {
