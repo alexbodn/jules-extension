@@ -979,6 +979,9 @@ export class JulesSessionsProvider
       return;
     }
 
+    // Update timestamp immediately to prevent concurrent refreshes
+    this.lastBranchRefreshTime = now;
+
     const selectedSource = this.context.globalState.get<SourceType>("selected-source");
     if (!selectedSource) {
       return;
@@ -990,7 +993,6 @@ export class JulesSessionsProvider
       // Use forceRefresh: false to respect the cache TTL (5 min).
       // The createSession command handles stale cache gracefully by re-fetching if the selected branch is missing from the remote list.
       await getBranchesForSession(selectedSource, apiClient, JulesSessionsProvider.silentOutputChannel, this.context, { forceRefresh: false, showProgress: false });
-      this.lastBranchRefreshTime = now;
       console.log("Jules: Branch cache updated successfully during background refresh");
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
