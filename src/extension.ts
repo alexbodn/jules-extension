@@ -175,7 +175,7 @@ async function getGitHubUrl(): Promise<string | undefined> {
     }
     return remote.fetchUrl || remote.pushUrl;
   } catch (error) {
-    console.error('Failed to get GitHub URL:', error);
+    console.error('Failed to get GitHub URL:', sanitizeForLogging(error));
     return undefined;
   }
 }
@@ -397,7 +397,7 @@ async function checkPRStatus(
 
     return isClosed;
   } catch (error) {
-    console.error(`Jules: Error checking PR status for ${prUrl}:`, error);
+    console.error(`Jules: Error checking PR status for ${prUrl}:`, sanitizeForLogging(error));
     return false;
   }
 }
@@ -480,7 +480,7 @@ async function fetchPlanFromActivities(
     const planActivity = [...data.activities].reverse().find((a) => a.planGenerated);
     return planActivity?.planGenerated?.plan || null;
   } catch (error) {
-    console.error(`Jules: Error fetching plan from activities: ${error}`);
+    console.error(`Jules: Error fetching plan from activities: ${sanitizeForLogging(error)}`);
     return null;
   }
 }
@@ -984,7 +984,7 @@ export class JulesSessionsProvider
       console.log("Jules: Branch cache updated successfully during background refresh");
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error(`Jules: Failed to update branch cache during background refresh for ${selectedSource.name}: ${errorMessage}`);
+      console.error(`Jules: Failed to update branch cache during background refresh for ${selectedSource.name}: ${sanitizeForLogging(errorMessage)}`);
     }
   }
 
@@ -1975,7 +1975,7 @@ export function activate(context: vscode.ExtensionContext) {
         Object.keys(prStatusCache).forEach((key) => delete prStatusCache[key]);
         sessionsProvider.refresh();
       } catch (error) {
-        console.error("Jules: Error setting GitHub Token:", error);
+        console.error("Jules: Error setting GitHub Token:", sanitizeForLogging(error));
         vscode.window.showErrorMessage(
           `GitHub Token の保存に失敗しました: ${error instanceof Error ? error.message : "Unknown error"
           }`
