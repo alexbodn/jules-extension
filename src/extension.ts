@@ -137,6 +137,12 @@ function updateRateLimitStatus(headers: Headers) {
     rateLimitStatusBarItem.hide();
   }
 }
+
+async function fetchJulesApi(input: string | URL | Request, init?: RequestInit & { timeout?: number }): Promise<Response> {
+    const response = await fetchWithTimeout(input, init);
+    updateRateLimitStatus(response.headers);
+    return response;
+}
 // Initialize with dummy to support usage before activate (e.g. in tests)
 let logChannel: vscode.OutputChannel = {
   name: 'Jules Logs (Fallback)',
@@ -476,7 +482,7 @@ async function fetchPlanFromActivities(
   apiKey: string
 ): Promise<Plan | null> {
   try {
-    const response = await fetchWithTimeout(
+    const response = await fetchJulesApi(
       `${JULES_API_BASE_URL}/${sessionId}/activities`,
       {
         method: "GET",
@@ -876,14 +882,13 @@ export class JulesSessionsProvider
         return;
       }
 
-      const response = await fetchWithTimeout(`${JULES_API_BASE_URL}/sessions`, {
+      const response = await fetchJulesApi(`${JULES_API_BASE_URL}/sessions`, {
         method: "GET",
         headers: {
           "X-Goog-Api-Key": apiKey,
           "Content-Type": "application/json",
         },
       });
-      updateRateLimitStatus(response.headers);
       if (!response.ok) {
         const errorMsg = `Failed to fetch sessions: ${response.status} ${response.statusText}`;
         logChannel.appendLine(`Jules: ${errorMsg}`);
@@ -1199,7 +1204,7 @@ async function approvePlan(
         title: "Approving plan...",
       },
       async () => {
-        const response = await fetchWithTimeout(
+        const response = await fetchJulesApi(
           `${JULES_API_BASE_URL}/${sessionId}:approvePlan`,
           {
             method: "POST",
@@ -1210,7 +1215,6 @@ async function approvePlan(
             body: JSON.stringify({}),
           }
         );
-        updateRateLimitStatus(response.headers);
         if (!response.ok) {
           throw new Error(
             `Failed to approve plan: ${response.status} ${response.statusText}`
@@ -1271,7 +1275,7 @@ async function sendMessageToSession(
         title: "Sending message to Jules...",
       },
       async () => {
-        const response = await fetchWithTimeout(
+        const response = await fetchJulesApi(
           `${JULES_API_BASE_URL}/${sessionId}:sendMessage`,
           {
             method: "POST",
@@ -1282,7 +1286,6 @@ async function sendMessageToSession(
             body: JSON.stringify({ prompt: finalPrompt }),
           }
         );
-        updateRateLimitStatus(response.headers);
         if (!response.ok) {
           const errorText = await response.text();
           const message =
@@ -1381,9 +1384,10 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(statusBarItem);
 
   // Rate limit status bar item
+  const RATE_LIMIT_STATUS_BAR_PRIORITY = 99; // Show it to the left of the main status bar item (priority 100)
   rateLimitStatusBarItem = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Left,
-    99 // Show it to the left of the main status bar item
+    RATE_LIMIT_STATUS_BAR_PRIORITY
   );
   context.subscriptions.push(rateLimitStatusBarItem);
 
@@ -1438,14 +1442,13 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
       try {
-        const response = await fetchWithTimeout(`${JULES_API_BASE_URL}/sources`, {
+        const response = await fetchJulesApi(`${JULES_API_BASE_URL}/sources`, {
           method: "GET",
           headers: {
             "X-Goog-Api-Key": apiKey,
             "Content-Type": "application/json",
           },
         });
-        updateRateLimitStatus(response.headers);
         if (response.ok) {
           vscode.window.showInformationMessage("API Key is valid.");
         } else {
@@ -1486,14 +1489,13 @@ export function activate(context: vscode.ExtensionContext) {
             title: 'Fetching sources...',
             cancellable: false
           }, async (progress) => {
-            const response = await fetchWithTimeout(`${JULES_API_BASE_URL}/sources`, {
+            const response = await fetchJulesApi(`${JULES_API_BASE_URL}/sources`, {
               method: "GET",
               headers: {
                 "X-Goog-Api-Key": apiKey,
                 "Content-Type": "application/json",
               },
             });
-            updateRateLimitStatus(response.headers);
             if (!response.ok) {
               throw new Error(`Failed to fetch sources: ${response.status} ${response.statusText}`);
             }
@@ -1713,7 +1715,7 @@ export function activate(context: vscode.ExtensionContext) {
               increment: 0,
               message: "Sending request...",
             });
-            const response = await fetchWithTimeout(`${JULES_API_BASE_URL}/sessions`, {
+            const response = await fetchJulesApi(`${JULES_API_BASE_URL}/sessions`, {
               method: "POST",
               headers: {
                 "X-Goog-Api-Key": apiKey,
@@ -1721,7 +1723,6 @@ export function activate(context: vscode.ExtensionContext) {
               },
               body: JSON.stringify(requestBody),
             });
-            updateRateLimitStatus(response.headers);
             progress.report({
               increment: 50,
               message: "Processing response...",
@@ -1793,7 +1794,7 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
       try {
-        const sessionResponse = await fetchWithTimeout(
+        const sessionResponse = await fetchJulesApi(
           `${JULES_API_BASE_URL}/${sessionId}`,
           {
             method: "GET",
@@ -1803,7 +1804,6 @@ export function activate(context: vscode.ExtensionContext) {
             },
           }
         );
-        updateRateLimitStatus(sessionResponse.headers);
         if (!sessionResponse.ok) {
           const errorText = await sessionResponse.text();
           vscode.window.showErrorMessage(
@@ -1822,7 +1822,6 @@ export function activate(context: vscode.ExtensionContext) {
             },
           }
         );
-        updateRateLimitStatus(response.headers);
         if (!response.ok) {
           const errorText = await response.text();
           vscode.window.showErrorMessage(
