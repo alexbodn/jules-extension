@@ -1076,7 +1076,7 @@ export class JulesSessionsProvider
       return [];
     }
 
-    return filteredSessions.map((session) => new SessionTreeItem(session));
+    return filteredSessions.map((session) => new SessionTreeItem(session, selectedSource));
   }
 }
 
@@ -1109,7 +1109,7 @@ export class SessionTreeItem extends vscode.TreeItem {
     'CANCELLED': 'Cancelled',
   };
 
-  constructor(public readonly session: Session) {
+  constructor(public readonly session: Session, private readonly selectedSource?: SourceType) {
     super(session.title || session.name, vscode.TreeItemCollapsibleState.None);
 
     const tooltip = new vscode.MarkdownString(`**${session.title || session.name}**`, true);
@@ -1131,7 +1131,9 @@ export class SessionTreeItem extends vscode.TreeItem {
       if (typeof source === 'string') {
         const repoMatch = source.match(/sources\/github\/(.+)/);
         const repoName = repoMatch ? repoMatch[1] : source;
-        tooltip.appendMarkdown(`\n\nSource: \`${repoName}\``);
+        const lockIcon = this.selectedSource?.isPrivate ? '$(lock) ' : '';
+        const privacyStatus = this.selectedSource?.isPrivate ? ' (Private Repository)' : ' (Public Repository)';
+        tooltip.appendMarkdown(`\n\nSource: ${lockIcon}\`${repoName}\`${privacyStatus}`);
       }
     }
 
@@ -1293,8 +1295,11 @@ function updateStatusBar(
     const repoMatch = selectedSource.name?.match(/sources\/github\/(.+)/);
     const repoName = repoMatch ? repoMatch[1] : selectedSource.name;
 
-    statusBarItem.text = `$(repo) Jules: ${repoName}`;
-    statusBarItem.tooltip = `Current Source: ${repoName}\nClick to change source`;
+    const lockIcon = selectedSource.isPrivate ? '$(lock) ' : '';
+    const privacyStatus = selectedSource.isPrivate ? ' (Private)' : '';
+    
+    statusBarItem.text = `$(repo) Jules: ${lockIcon}${repoName}`;
+    statusBarItem.tooltip = `Current Source: ${repoName}${privacyStatus}\nClick to change source`;
     statusBarItem.show();
   } else {
     statusBarItem.text = `$(repo) Jules: No source selected`;
@@ -1477,12 +1482,18 @@ export function activate(context: vscode.ExtensionContext) {
           });
         }
 
-        const items: SourceQuickPickItem[] = sources.map((source) => ({
-          label: source.name || source.id || "Unknown",
-          description: source.url || "",
-          detail: source.description || "",
-          source: source,
-        }));
+        const items: SourceQuickPickItem[] = sources.map((source) => {
+          // GitHubリポジトリ名を抽出（例: "sources/github/owner/repo" -> "owner/repo"）
+          const repoMatch = source.name?.match(/sources\/github\/(.+)/);
+          const repoName = repoMatch ? repoMatch[1] : (source.name || source.id || "Unknown");
+          
+          return {
+            label: source.isPrivate ? `$(lock) ${repoName}` : repoName,
+            description: source.isPrivate ? "Private" : (source.url || ""),
+            detail: source.description || "",
+            source: source,
+          };
+        });
         const selected: SourceQuickPickItem | undefined =
           await vscode.window.showQuickPick(items, {
             placeHolder: "Select a Jules Source",
