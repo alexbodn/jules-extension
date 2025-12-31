@@ -1498,13 +1498,21 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         const items: SourceQuickPickItem[] = sources.map((source) => {
-          // GitHubリポジトリ名を抽出（例: "sources/github/owner/repo" -> "owner/repo"）
+          // Extract repository name (e.g., "sources/github/owner/repo" -> "owner/repo")
           const repoMatch = source.name?.match(/sources\/github\/(.+)/);
           const repoName = repoMatch ? repoMatch[1] : (source.name || source.id || "Unknown");
           
+          // Determine description: show "Private" for private repos, otherwise show URL
+          let description = source.url || "";
+          if (source.isPrivate === true) {
+            description = "Private";
+          } else if (source.isPrivate === false) {
+            description = source.url || "Public";
+          }
+          
           return {
             label: source.isPrivate === true ? `$(lock) ${repoName}` : repoName,
-            description: source.isPrivate === true ? "Private" : (source.url || ""),
+            description: description,
             detail: source.description || "",
             source: source,
           };
