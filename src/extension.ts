@@ -1131,7 +1131,7 @@ export class SessionTreeItem extends vscode.TreeItem {
       if (typeof source === 'string') {
         const repoMatch = source.match(/sources\/github\/(.+)/);
         const repoName = repoMatch ? repoMatch[1] : source;
-        const lockIcon = this.selectedSource?.isPrivate ? '$(lock) ' : '';
+        const lockIcon = this.selectedSource?.isPrivate === true ? '$(lock) ' : '';
         
         // Only show privacy status if isPrivate is explicitly set
         let privacyStatus = '';
@@ -1303,7 +1303,7 @@ function updateStatusBar(
     const repoMatch = selectedSource.name?.match(/sources\/github\/(.+)/);
     const repoName = repoMatch ? repoMatch[1] : selectedSource.name;
 
-    const lockIcon = selectedSource.isPrivate ? '$(lock) ' : '';
+    const lockIcon = selectedSource.isPrivate === true ? '$(lock) ' : '';
     
     // Only show privacy status in tooltip if isPrivate is explicitly set
     let privacyStatus = '';
@@ -1503,8 +1503,8 @@ export function activate(context: vscode.ExtensionContext) {
           const repoName = repoMatch ? repoMatch[1] : (source.name || source.id || "Unknown");
           
           return {
-            label: source.isPrivate ? `$(lock) ${repoName}` : repoName,
-            description: source.isPrivate ? "Private" : (source.url || ""),
+            label: source.isPrivate === true ? `$(lock) ${repoName}` : repoName,
+            description: source.isPrivate === true ? "Private" : (source.url || ""),
             detail: source.description || "",
             source: source,
           };
