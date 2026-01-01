@@ -375,7 +375,8 @@ function extractPRUrl(sessionOrState: Session | SessionState): string | null {
 
 async function checkPRStatus(
   prUrl: string,
-  context: vscode.ExtensionContext
+  context: vscode.ExtensionContext,
+  token?: string
 ): Promise<boolean> {
   // Check cache first
   const cached = prStatusCache[prUrl];
@@ -398,19 +399,22 @@ async function checkPRStatus(
     const apiUrl = `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}`;
 
     // Prefer OAuth token, fallback to manually set PAT
-    let token = await GitHubAuth.getToken();
-    if (!token) {
-      token = await context.secrets.get("jules-github-token");
-      if (token) {
-        console.log("[Jules] Using fallback GitHub PAT for PR status check.");
+    let authToken = token;
+    if (!authToken) {
+      authToken = await GitHubAuth.getToken();
+      if (!authToken) {
+        authToken = await context.secrets.get("jules-github-token");
+        if (authToken) {
+          console.log("[Jules] Using fallback GitHub PAT for PR status check.");
+        }
       }
     }
 
     const headers: Record<string, string> = {
       Accept: "application/vnd.github.v3+json",
     };
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
+    if (authToken) {
+      headers.Authorization = `Bearer ${authToken}`;
     }
 
     const response = await fetchWithTimeout(apiUrl, { headers });
@@ -668,11 +672,18 @@ export async function updatePreviousStates(
   const prStatusMap = new Map<string, boolean>();
 
   if (sessionsToCheck.length > 0) {
+    // Optimization: Fetch token once for all parallel checks to avoid
+    // hitting authentication provider or secure storage repeatedly.
+    let token = await GitHubAuth.getToken();
+    if (!token) {
+      token = (await context.secrets.get("jules-github-token"));
+    }
+
     await Promise.all(sessionsToCheck.map(async (session) => {
       const prUrl = extractPRUrl(session);
       // The `if (prUrl)` check is redundant because `sessionsToCheck` is already filtered.
       // `prUrl` is guaranteed to be non-null here.
-      const isClosed = await checkPRStatus(prUrl!, context);
+      const isClosed = await checkPRStatus(prUrl!, context, token);
       prStatusMap.set(session.name, isClosed);
     }));
   }
