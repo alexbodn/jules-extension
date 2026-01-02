@@ -4,16 +4,17 @@ import * as assert from "assert";
 // as well as import your extension to test it
 import * as vscode from "vscode";
 import {
-  SessionTreeItem,
-  mapApiStateToSessionState,
   buildFinalPrompt,
-  areOutputsEqual,
-  areSessionListsEqual,
-  updatePreviousStates,
-  Session,
-  SessionOutput,
   handleOpenInWebApp
 } from "../extension";
+import {
+    mapApiStateToSessionState,
+    areOutputsEqual,
+    areSessionListsEqual,
+} from "../sessionUtils";
+import { SessionStateManager } from "../sessionState";
+import { SessionTreeItem } from "../sessionViewProvider";
+import { Session, SessionOutput } from "../types";
 import * as sinon from "sinon";
 import * as fetchUtils from "../fetchUtils";
 import { activate } from "../extension";
@@ -263,8 +264,21 @@ suite("Extension Test Suite", () => {
       const registerCmdStub = localSandbox.stub(vscode.commands, 'registerCommand').callsFake(() => ({ dispose: () => {} } as any));
 
       // Call activate to load and clean cache
+      // Note: Since we refactored, SessionStateManager in activate handles this.
+      // But verify if cache cleaning is triggered.
       activate(mockContext);
 
+      // Wait for async operations in activate? activate is synchronous but can trigger async.
+      // The cleanup is in SessionStateManager constructor which is sync.
+
+      // Verify that expired entry is deleted from the OBJECT reference we passed
+      // Wait, getStub returns prCache. SessionStateManager constructor modifies it?
+      // Yes, `this.prStatusCache` is assigned result of `get`.
+      // `delete this.prStatusCache[url]` will modify the object if it's the same reference.
+
+      // However, we need to verify if it tries to check PR status using the new SessionStateManager.
+
+      const sessionStateManager = new SessionStateManager(mockContext, { appendLine: () => {} } as any);
 
       // Now trigger PR status checks by calling updatePreviousStates for two completed sessions
       const session1: Session = {
@@ -284,9 +298,13 @@ suite("Extension Test Suite", () => {
       };
 
       // Run updatePreviousStates which will invoke PR checks; the valid cached PR should NOT trigger a fetch
-      await updatePreviousStates([session1, session2], mockContext);
+      await sessionStateManager.updatePreviousStates([session1, session2]);
 
       // Expect one fetch call (for the expired PR only)
+      // Wait, if SessionStateManager cleans up expired cache in constructor, then the expired entry is gone.
+      // So checkPRStatus will see no cache entry and fetch.
+      // The valid entry remains, so checkPRStatus will use it and NOT fetch.
+
       assert.strictEqual(fetchStub.callCount, 1);
       const fetchArg0 = String(fetchStub.getCall(0).args[0]);
       assert.ok(fetchArg0.includes('/repos/owner/repo/pulls/2'));
@@ -438,6 +456,7 @@ suite("Extension Test Suite", () => {
     let sandbox: sinon.SinonSandbox;
     let mockContext: vscode.ExtensionContext;
     let updateStub: sinon.SinonStub;
+    let sessionStateManager: SessionStateManager;
 
     setup(() => {
       sandbox = sinon.createSandbox();
@@ -449,6 +468,7 @@ suite("Extension Test Suite", () => {
           keys: sandbox.stub().returns([]),
         },
       } as any;
+      sessionStateManager = new SessionStateManager(mockContext, { appendLine: () => {} } as any);
     });
 
     teardown(() => {
@@ -465,37 +485,49 @@ suite("Extension Test Suite", () => {
       };
 
       // Update once to set initial state
-      await updatePreviousStates([session], mockContext);
-      // Calls update for both previousSessionStates and prStatusCache
-      assert.strictEqual(updateStub.callCount, 2, "First call should update (states + cache)");
+      await sessionStateManager.updatePreviousStates([session]);
+      // Calls update for both previousSessionStates. PR status cache logic calls update internally too.
+      // previousSessionStates save is explicit.
+      // Note: PR cache save logic is inside checkPRStatus which is called if completed.
+      // Here session is RUNNING.
+      assert.strictEqual(updateStub.callCount, 1, "First call should update (states)");
 
       // Update again with same state
       updateStub.resetHistory();
-      await updatePreviousStates([session], mockContext);
+      await sessionStateManager.updatePreviousStates([session]);
       assert.strictEqual(updateStub.callCount, 0, "Second call with same data should not update");
     });
 
     test("should update globalState if session state changed", async () => {
       const session1: Session = { name: "s2", title: "t", state: "RUNNING", rawState: "RUNNING", outputs: [] };
-      await updatePreviousStates([session1], mockContext);
+      await sessionStateManager.updatePreviousStates([session1]);
       updateStub.resetHistory();
 
       const session2: Session = { ...session1, state: "COMPLETED" };
-      await updatePreviousStates([session2], mockContext);
-      assert.strictEqual(updateStub.callCount, 2, "Should update when state changes (states + cache)");
+      await sessionStateManager.updatePreviousStates([session2]);
+      assert.strictEqual(updateStub.callCount, 1, "Should update when state changes");
     });
 
     test("should persist PR status cache when session state changes", async () => {
+      // NOTE: PR status cache is updated inside checkPRStatus, which calls globalState.update("jules.prStatusCache", ...)
+      // We need to ensure that logic is hit.
+      // Mock checkPRStatus? Or rely on behavior.
+      // checkPRStatus checks PR cache first.
+
       const session: Session = {
         name: "s3",
         title: "title",
         state: "COMPLETED",
         rawState: "COMPLETED",
-        outputs: []
+        outputs: [{ pullRequest: { url: "http://github.com/a/b/pull/1", title: "PR", description: "" } }]
       };
 
-      await updatePreviousStates([session], mockContext);
+      // We need to mock fetch because checkPRStatus will try to fetch if not cached
+      const fetchStub = sandbox.stub(fetchUtils, 'fetchWithTimeout').resolves({ ok: true, json: async () => ({ state: 'open' }) } as any);
 
+      await sessionStateManager.updatePreviousStates([session]);
+
+      // Assert that update was called for prStatusCache
       let prCacheUpdateCalled = false;
       for (const call of updateStub.getCalls()) {
         if (call.args[0] === "jules.prStatusCache") {

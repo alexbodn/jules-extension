@@ -1,13 +1,16 @@
 
 import * as assert from "assert";
 import * as vscode from "vscode";
-import { updatePreviousStates, Session } from "../extension";
+import { Session } from "../types";
+import { SessionStateManager } from "../sessionState";
 import * as sinon from "sinon";
+import * as fetchUtils from "../fetchUtils";
 
 suite("Performance Tests", () => {
     let sandbox: sinon.SinonSandbox;
     let mockContext: vscode.ExtensionContext;
     let fetchStub: sinon.SinonStub;
+    let sessionStateManager: SessionStateManager;
 
     setup(() => {
         sandbox = sinon.createSandbox();
@@ -21,9 +24,10 @@ suite("Performance Tests", () => {
                 get: sandbox.stub().resolves("dummy-token"),
             }
         } as any;
+        sessionStateManager = new SessionStateManager(mockContext, { appendLine: () => {} } as any);
 
         // Mock fetch with a delay to simulate network latency
-        fetchStub = sandbox.stub(global, 'fetch');
+        fetchStub = sandbox.stub(fetchUtils, 'fetchWithTimeout');
         fetchStub.callsFake(async () => {
             await new Promise(resolve => setTimeout(resolve, 100)); // 100ms latency
             return {
@@ -55,7 +59,7 @@ suite("Performance Tests", () => {
         }));
 
         const start = Date.now();
-        await updatePreviousStates(sessions, mockContext);
+        await sessionStateManager.updatePreviousStates(sessions);
         const duration = Date.now() - start;
 
         // If sequential: 5 * 100ms = 500ms
