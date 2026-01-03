@@ -467,6 +467,18 @@ suite("Composer Test Suite", () => {
       assert.ok(html.includes("submitButton.innerText = 'Sending...';"));
       assert.ok(html.includes("submitButton.disabled = true;"));
       assert.ok(html.includes("textarea.disabled = true;"));
+      assert.ok(html.includes("document.getElementById('cancel').disabled = true;"));
+      assert.ok(html.includes("document.body.style.cursor = 'wait';"));
+    });
+
+    test("should disable checkboxes in loading state when present", () => {
+      const html = getComposerHtml(
+        mockWebview,
+        { title: "Test", showCreatePrCheckbox: true, showRequireApprovalCheckbox: true },
+        "nonce-123"
+      );
+      assert.ok(html.includes("if (createPrCheckbox) createPrCheckbox.disabled = true;"));
+      assert.ok(html.includes("if (requireApprovalCheckbox) requireApprovalCheckbox.disabled = true;"));
     });
   });
 });
