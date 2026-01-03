@@ -882,6 +882,8 @@ export class JulesSessionsProvider
 
   private sessionsCache: Session[] = [];
   private isFetching = false;
+  private lastBranchRefreshTime: number = 0;
+  private readonly BRANCH_REFRESH_INTERVAL = 4 * 60 * 1000; // 4 minutes
 
   constructor(private context: vscode.ExtensionContext) { }
 
@@ -1017,6 +1019,16 @@ export class JulesSessionsProvider
   }
 
   private async _refreshBranchCacheInBackground(apiKey: string): Promise<void> {
+    // Optimization: Throttle background branch refresh to avoid excessive I/O and CPU usage
+    // The cache TTL is 5 minutes, so we check every 4 minutes to keep it relatively fresh without polling constantly.
+    const now = Date.now();
+    if (now - this.lastBranchRefreshTime < this.BRANCH_REFRESH_INTERVAL) {
+      return;
+    }
+
+    // Update timestamp immediately to prevent concurrent refreshes
+    this.lastBranchRefreshTime = now;
+
     const selectedSource = this.context.globalState.get<SourceType>("selected-source");
     if (!selectedSource) {
       return;
