@@ -214,6 +214,16 @@ suite("Composer Test Suite", () => {
       assert.ok(html.includes('cursor: not-allowed;'));
     });
 
+    test("should include secondary button hover styles", () => {
+      const html = getComposerHtml(
+        mockWebview,
+        { title: "Test" },
+        "nonce-123"
+      );
+      assert.ok(html.includes('button:not(.primary):hover {'));
+      assert.ok(html.includes('background: var(--vscode-button-secondaryHoverBackground);'));
+    });
+
     test("validation logic should work with empty initial value", () => {
       const html = getComposerHtml(
         mockWebview,
