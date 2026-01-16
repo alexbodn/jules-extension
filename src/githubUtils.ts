@@ -1,4 +1,52 @@
 import * as vscode from 'vscode';
+import { promisify } from 'util';
+import { exec } from 'child_process';
+import { GitHubAuth } from './githubAuth';
+import { stripUrlCredentials, sanitizeForLogging } from './securityUtils';
+import { sanitizeError } from './errorUtils';
+import { fetchWithTimeout } from './fetchUtils';
+
+const execAsync = promisify(exec);
+
+// --- Cache Logic ---
+export interface PRStatusCache {
+    [prUrl: string]: {
+        isClosed: boolean;
+        lastChecked: number;
+    };
+}
+
+let prStatusCache: PRStatusCache = {};
+const PR_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+/**
+ * Initialize the PR status cache from global state and clean up expired entries.
+ */
+export function initPRStatusCache(context: vscode.ExtensionContext): void {
+    prStatusCache = context.globalState.get<PRStatusCache>("jules.prStatusCache", {});
+    const now = Date.now();
+    const expiredUrls = Object.keys(prStatusCache).filter(
+        (url) => now - prStatusCache[url].lastChecked > PR_CACHE_DURATION
+    );
+
+    if (expiredUrls.length > 0) {
+        expiredUrls.forEach((url) => delete prStatusCache[url]);
+        console.log(`Jules: Cleaned up ${expiredUrls.length} expired PR status cache entries.`);
+    }
+}
+
+/**
+ * Accessor for prStatusCache if needed externally (e.g. for clearing cache)
+ */
+export function clearPRStatusCache(): void {
+    prStatusCache = {};
+}
+
+export function getPRStatusCache(): PRStatusCache {
+    return prStatusCache;
+}
+
+// --- Git/GitHub Functions ---
 
 export interface GitHubUrlInfo {
     owner: string;
@@ -23,6 +71,234 @@ export function parseGitHubUrl(url: string): GitHubUrlInfo | null {
         repo: match[2],
     };
 }
+
+export async function getGitHubUrl(): Promise<string | undefined> {
+    try {
+        const gitExtension = vscode.extensions.getExtension('vscode.git');
+        if (!gitExtension) {
+            throw new Error('Git extension not found');
+        }
+        const git = gitExtension.exports.getAPI(1);
+        const repository = git.repositories[0];
+        if (!repository) {
+            throw new Error('No Git repository found');
+        }
+        const remote = repository.state.remotes.find(
+            (r: { name: string; fetchUrl?: string; pushUrl?: string }) => r.name === 'origin'
+        );
+        if (!remote) {
+            throw new Error('No origin remote found');
+        }
+        return remote.fetchUrl || remote.pushUrl;
+    } catch (error) {
+        console.error('Failed to get GitHub URL:', sanitizeError(error));
+        return undefined;
+    }
+}
+
+export async function getCurrentBranchSha(outputChannel?: vscode.OutputChannel): Promise<string | null> {
+    const logger = outputChannel ?? { appendLine: (s: string) => console.log(s) } as vscode.OutputChannel;
+    try {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+            return null;
+        }
+
+        const { stdout } = await execAsync('git rev-parse HEAD', {
+            cwd: workspaceFolder.uri.fsPath
+        });
+
+        return stdout.trim();
+    } catch (error) {
+        logger.appendLine(`[Jules] Error getting current branch sha: ${error}`);
+        return null;
+    }
+}
+
+/**
+ * リモートブランチ作成に必要なリポジトリ情報を取得
+ */
+export async function getRepoInfoForBranchCreation(outputChannel?: vscode.OutputChannel): Promise<{ token: string; owner: string; repo: string } | null> {
+    const logger = outputChannel ?? { appendLine: (s: string) => console.log(s) } as vscode.OutputChannel;
+    const token = await GitHubAuth.getToken();
+
+    if (!token) {
+        const action = await vscode.window.showInformationMessage(
+            'Sign in to GitHub to create remote branch',
+            'Sign In',
+            'Cancel'
+        );
+
+        if (action === 'Sign In') {
+            const newToken = await GitHubAuth.signIn();
+            if (!newToken) {
+                return null;
+            }
+            return getRepoInfoForBranchCreation(outputChannel);
+        }
+        return null;
+    }
+
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+        vscode.window.showErrorMessage('No workspace folder found');
+        return null;
+    }
+
+    try {
+        const { stdout } = await execAsync('git remote get-url origin', {
+            cwd: workspaceFolder.uri.fsPath
+        });
+
+        const remoteUrl = stdout.trim();
+        const safeRemoteUrl = stripUrlCredentials(remoteUrl);
+        logger.appendLine(`[Jules] Remote URL: ${safeRemoteUrl}`);
+
+        // Prefer the shared parser which handles https/ssh and .git suffixes
+        const repoInfo = parseGitHubUrl(safeRemoteUrl);
+        if (!repoInfo) {
+            vscode.window.showErrorMessage('Could not parse GitHub repository URL');
+            return null;
+        }
+        const { owner, repo } = repoInfo;
+        logger.appendLine(`[Jules] Repository: ${owner}/${repo}`);
+
+        return { token, owner, repo };
+    } catch (error: any) {
+        logger.appendLine(`[Jules] Error getting repo info: ${error.message}`);
+        vscode.window.showErrorMessage(`Failed to get repository info: ${error.message}`);
+        return null;
+    }
+}
+
+
+export async function createRemoteBranch(
+    token: string,
+    owner: string,
+    repo: string,
+    branchName: string,
+    outputChannel?: vscode.OutputChannel
+): Promise<void> {
+    const logger = outputChannel ?? { appendLine: (s: string) => console.log(s) } as vscode.OutputChannel;
+    try {
+        logger.appendLine('[Jules] Getting current branch SHA...');
+        const sha = await getCurrentBranchSha(outputChannel);
+
+        if (!sha) {
+            throw new Error('Failed to get current branch SHA');
+        }
+
+        logger.appendLine(`[Jules] Current branch SHA: ${sha}`);
+        logger.appendLine(`[Jules] Creating remote branch: ${branchName}`);
+
+        const response = await fetchWithTimeout(
+            `https://api.github.com/repos/${owner}/${repo}/git/refs`,
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/vnd.github+json',
+                    'X-GitHub-Api-Version': '2022-11-28',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    ref: `refs/heads/${branchName}`,
+                    sha: sha
+                })
+            }
+        );
+
+        if (!response.ok) {
+            // Read the response as text so we can handle non-JSON errors robustly
+            const respText = await response.text();
+            logger.appendLine(`[Jules] GitHub API error response: ${sanitizeForLogging(respText)}`);
+            let errMsg = 'Unknown error';
+            try {
+                const parsed = JSON.parse(respText);
+                errMsg = parsed?.message || JSON.stringify(parsed);
+            } catch (e) {
+                errMsg = respText;
+            }
+            throw new Error(`GitHub API error: ${response.status} - ${errMsg}`);
+        }
+
+        const result: any = await response.json().catch(() => null);
+        logger.appendLine(`[Jules] Remote branch created: ${result?.ref ?? 'unknown'}`);
+    } catch (error: any) {
+        logger.appendLine(`[Jules] Failed to create remote branch: ${error.message}`);
+        throw error;
+    }
+}
+
+export async function checkPRStatus(
+    prUrl: string,
+    context: vscode.ExtensionContext,
+    token?: string
+): Promise<boolean> {
+    // Check cache first
+    const cached = prStatusCache[prUrl];
+    const now = Date.now();
+    if (cached && now - cached.lastChecked < PR_CACHE_DURATION) {
+        return cached.isClosed;
+    }
+
+    try {
+        // Parse GitHub PR URL: https://github.com/owner/repo/pull/123
+        const match = prUrl.match(
+            /github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/
+        );
+        if (!match) {
+            console.log(`Jules: Invalid GitHub PR URL format: ${prUrl}`);
+            return false;
+        }
+
+        const [, owner, repo, prNumber] = match;
+        const apiUrl = `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}`;
+
+        // Prefer OAuth token, fallback to manually set PAT
+        let authToken = token;
+        if (!authToken) {
+            authToken = await GitHubAuth.getToken();
+            if (!authToken) {
+                authToken = await context.secrets.get("jules-github-token");
+                if (authToken) {
+                    console.log("[Jules] Using fallback GitHub PAT for PR status check.");
+                }
+            }
+        }
+
+        const headers: Record<string, string> = {
+            Accept: "application/vnd.github.v3+json",
+        };
+        if (authToken) {
+            headers.Authorization = `Bearer ${authToken}`;
+        }
+
+        const response = await fetchWithTimeout(apiUrl, { headers });
+
+        if (!response.ok) {
+            console.log(
+                `Jules: Failed to fetch PR status: ${response.status} ${response.statusText}`
+            );
+            return false;
+        }
+
+        const prData = (await response.json()) as { state: string };
+        const isClosed = prData.state === "closed";
+
+        // Update cache
+        prStatusCache[prUrl] = {
+            isClosed,
+            lastChecked: now
+        };
+
+        return isClosed;
+    } catch (error) {
+        console.error(`Jules: Error checking PR status for ${prUrl}:`, sanitizeError(error));
+        return false;
+    }
+}
+
 /**
  * @deprecated Use GitHubAuth.getToken() instead. PAT support will be removed in a future version
  */
@@ -35,30 +311,4 @@ export async function getGitHubPAT(context: vscode.ExtensionContext): Promise<st
  */
 export async function setGitHubPAT(context: vscode.ExtensionContext, pat: string): Promise<void> {
     await context.secrets.store('github-pat', pat);
-}
-export async function createRemoteBranch(
-    pat: string,
-    owner: string,
-    repo: string,
-    branchName: string
-): Promise<void> {
-    const { Octokit } = await import('@octokit/rest');
-    const octokit = new Octokit({ auth: pat });
-
-    // デフォルトブランチのSHAを取得
-    const { data: repoData } = await octokit.repos.get({ owner, repo });
-    const defaultBranch = repoData.default_branch;
-    const { data: refData } = await octokit.git.getRef({
-        owner,
-        repo,
-        ref: `heads/${defaultBranch}`
-    });
-    const baseSha = refData.object.sha;
-
-    await octokit.git.createRef({
-        owner,
-        repo,
-        ref: `refs/heads/${branchName}`,
-        sha: baseSha
-    });
 }
