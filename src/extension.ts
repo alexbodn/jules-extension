@@ -117,6 +117,7 @@ interface SessionState {
 
 let previousSessionStates: Map<string, SessionState> = new Map();
 let notifiedSessions: Set<string> = new Set();
+let archivedSessions: Map<string, Session> = new Map();
 // Initialize with dummy to support usage before activate (e.g. in tests)
 let logChannel: vscode.OutputChannel = {
   name: 'Jules Logs (Fallback)',
@@ -139,6 +140,19 @@ function loadPreviousSessionStates(context: vscode.ExtensionContext): void {
     `Jules: Loaded ${previousSessionStates.size} previous session states from global state.`
   );
 }
+
+function loadArchivedSessions(context: vscode.ExtensionContext): void {
+  const storedSessions = context.globalState.get<{ [key: string]: Session }>(
+    "jules.archivedSessions",
+    {}
+  );
+  archivedSessions = new Map(Object.entries(storedSessions));
+  console.log(
+    `Jules: Loaded ${archivedSessions.size} archived sessions from global state.`
+  );
+  vscode.commands.executeCommand('setContext', 'jules-extension.hasArchivedSessions', archivedSessions.size > 0);
+}
+
 let autoRefreshInterval: NodeJS.Timeout | undefined;
 let isFetchingSensitiveData = false;
 
@@ -1131,11 +1145,53 @@ export class JulesSessionsProvider
       }
     }
 
+    // Filter out archived sessions
+    const beforeArchiveFilterCount = filteredSessions.length;
+    filteredSessions = filteredSessions.filter(
+      (session) => !archivedSessions.has(session.name)
+    );
+    const archiveFilteredCount = beforeArchiveFilterCount - filteredSessions.length;
+    if (archiveFilteredCount > 0) {
+      console.log(
+        `Jules: Filtered out ${archiveFilteredCount} archived sessions (${beforeArchiveFilterCount} -> ${filteredSessions.length})`
+      );
+    }
+
     if (filteredSessions.length === 0) {
       return [];
     }
 
     return filteredSessions.map((session) => new SessionTreeItem(session, selectedSource));
+  }
+}
+
+export class ArchivedJulesSessionsProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
+  private _onDidChangeTreeData: vscode.EventEmitter<vscode.TreeItem | undefined | null | void> = new vscode.EventEmitter<vscode.TreeItem | undefined | null | void>();
+  readonly onDidChangeTreeData: vscode.Event<vscode.TreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
+
+  constructor(private context: vscode.ExtensionContext) { }
+
+  refresh(): void {
+    this._onDidChangeTreeData.fire();
+  }
+
+  getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
+    return element;
+  }
+
+  async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
+    if (element) {
+      return [];
+    }
+
+    const sessions = Array.from(archivedSessions.values());
+    if (sessions.length === 0) {
+      return [];
+    }
+    const selectedSource = this.context.globalState.get<SourceType>("selected-source");
+
+
+    return sessions.map((session) => new SessionTreeItem(session, selectedSource));
   }
 }
 
@@ -1408,6 +1464,7 @@ export function activate(context: vscode.ExtensionContext) {
   }
 
   loadPreviousSessionStates(context);
+  loadArchivedSessions(context);
 
   const sessionsProvider = new JulesSessionsProvider(context);
   const sessionsTreeView = vscode.window.createTreeView("julesSessionsView", {
@@ -1415,6 +1472,12 @@ export function activate(context: vscode.ExtensionContext) {
     showCollapseAll: false,
   });
   console.log("Jules: TreeView created");
+
+  const archivedSessionsProvider = new ArchivedJulesSessionsProvider(context);
+  const archivedSessionsTreeView = vscode.window.createTreeView("julesArchivedSessionsView", {
+    treeDataProvider: archivedSessionsProvider,
+    showCollapseAll: false,
+  });
 
   // ステータスバーアイテム作成
   const statusBarItem = vscode.window.createStatusBarItem(
@@ -1965,8 +2028,8 @@ export function activate(context: vscode.ExtensionContext) {
     }
   );
 
-  const deleteSessionDisposable = vscode.commands.registerCommand(
-    "jules-extension.deleteSession",
+  const archiveSessionDisposable = vscode.commands.registerCommand(
+    "jules-extension.archiveSession",
     async (item?: SessionTreeItem) => {
       if (!item || !(item instanceof SessionTreeItem)) {
         vscode.window.showErrorMessage("No session selected.");
@@ -1974,29 +2037,48 @@ export function activate(context: vscode.ExtensionContext) {
       }
 
       const session = item.session;
-      const confirm = await vscode.window.showWarningMessage(
-        `Are you sure you want to delete session "${session.title}" from local cache?\n\nNote: this only removes it locally and does not delete the session on Jules server.`,
-        { modal: true },
-        "Delete"
+      archivedSessions.set(session.name, session);
+      await context.globalState.update(
+        "jules.archivedSessions",
+        Object.fromEntries(archivedSessions)
+      );
+      vscode.commands.executeCommand('setContext', 'jules-extension.hasArchivedSessions', true);
+
+
+      vscode.window.showInformationMessage(
+        `Session "${session.title}" archived.`
       );
 
-      if (confirm !== "Delete") {
+      sessionsProvider.refresh();
+      archivedSessionsProvider.refresh();
+    }
+  );
+
+  const unarchiveSessionDisposable = vscode.commands.registerCommand(
+    "jules-extension.unarchiveSession",
+    async (item?: SessionTreeItem) => {
+      if (!item || !(item instanceof SessionTreeItem)) {
+        vscode.window.showErrorMessage("No session selected.");
         return;
       }
 
-      // Remove from previous states to hide it
-      previousSessionStates.delete(session.name);
+      const session = item.session;
+      archivedSessions.delete(session.name);
       await context.globalState.update(
-        "jules.previousSessionStates",
-        Object.fromEntries(previousSessionStates)
+        "jules.archivedSessions",
+        Object.fromEntries(archivedSessions)
       );
+
+      if (archivedSessions.size === 0) {
+        vscode.commands.executeCommand('setContext', 'jules-extension.hasArchivedSessions', false);
+      }
 
       vscode.window.showInformationMessage(
-        `Session "${session.title}" removed from local cache.`
+        `Session "${session.title}" unarchived.`
       );
 
-      // Refresh the view
       sessionsProvider.refresh();
+      archivedSessionsProvider.refresh();
     }
   );
 
@@ -2145,13 +2227,15 @@ export function activate(context: vscode.ExtensionContext) {
     listSourcesDisposable,
     createSessionDisposable,
     sessionsTreeView,
+    archivedSessionsTreeView,
     refreshSessionsDisposable,
     showActivitiesDisposable,
     refreshActivitiesDisposable,
     sendMessageDisposable,
     approvePlanDisposable,
     openSettingsDisposable,
-    deleteSessionDisposable,
+    archiveSessionDisposable,
+    unarchiveSessionDisposable,
     setGithubTokenDisposable,
     setGitHubPatDisposable,
     clearCacheDisposable,
@@ -2163,4 +2247,3 @@ export function activate(context: vscode.ExtensionContext) {
 export function deactivate() {
   stopAutoRefresh();
 }
-

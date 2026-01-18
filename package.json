@@ -156,10 +156,16 @@
         "icon": "$(settings-gear)"
       },
       {
-        "command": "jules-extension.deleteSession",
-        "title": "Delete Session from Local Cache",
+        "command": "jules-extension.archiveSession",
+        "title": "Archive Session",
         "category": "Jules",
-        "icon": "$(trash)"
+        "icon": "$(archive)"
+      },
+      {
+        "command": "jules-extension.unarchiveSession",
+        "title": "Unarchive Session",
+        "category": "Jules",
+        "icon": "$(unarchive)"
       },
       {
         "command": "jules-extension.setGithubToken",
@@ -201,6 +207,11 @@
         "view": "julesSessionsView",
         "contents": "No sessions found.\n[Create Session](command:jules-extension.createSession)",
         "when": "jules-extension.hasSelectedSource"
+      },
+      {
+        "view": "julesArchivedSessionsView",
+        "contents": "No archived sessions.",
+        "when": "!jules-extension.hasArchivedSessions"
       }
     ],
     "views": {
@@ -210,6 +221,13 @@
           "name": "Jules Sessions",
           "icon": "$(robot)",
           "contextualTitle": "Jules Sessions"
+        },
+        {
+          "id": "julesArchivedSessionsView",
+          "name": "Archived Sessions",
+          "icon": "$(archive)",
+          "contextualTitle": "Jules Archived Sessions",
+          "when": "jules-extension.hasArchivedSessions"
         }
       ]
     },
@@ -248,8 +266,13 @@
           "group": "inline"
         },
         {
-          "command": "jules-extension.deleteSession",
+          "command": "jules-extension.archiveSession",
           "when": "view == julesSessionsView && viewItem =~ /jules-session/",
+          "group": "management"
+        },
+        {
+          "command": "jules-extension.unarchiveSession",
+          "when": "view == julesArchivedSessionsView && viewItem =~ /jules-session/",
           "group": "management"
         },
         {
