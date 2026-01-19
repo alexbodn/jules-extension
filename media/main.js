@@ -57,9 +57,9 @@
         currentSession = session;
         header.classList.remove('hidden');
         sessionTitle.innerText = session.title || session.name;
-        
+
         messagesContainer.innerHTML = ''; // Clear existing
-        
+
         if (activities && activities.length > 0) {
             activities.forEach(activity => appendActivity(activity));
         } else {
@@ -68,7 +68,7 @@
             empty.innerText = 'No activities yet.';
             messagesContainer.appendChild(empty);
         }
-        
+
         scrollToBottom();
     }
 
@@ -81,14 +81,14 @@
     function appendActivity(activity) {
         const msgDiv = document.createElement('div');
         msgDiv.className = `message ${activity.originator || 'unknown'}`;
-        
+
         const headerDiv = document.createElement('div');
         headerDiv.className = 'message-header';
-        
+
         const iconSpan = document.createElement('span');
         iconSpan.className = 'message-icon';
         iconSpan.innerText = activity.icon || 'ℹ️';
-        
+
         const timeSpan = document.createElement('span');
         timeSpan.className = 'message-time';
         if (activity.createTime) {
@@ -116,7 +116,7 @@
 
         msgDiv.appendChild(headerDiv);
         msgDiv.appendChild(contentDiv);
-        
+
         messagesContainer.appendChild(msgDiv);
     }
 

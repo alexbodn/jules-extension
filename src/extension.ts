@@ -1845,11 +1845,11 @@ export function activate(context: vscode.ExtensionContext) {
       }
       try {
         const apiClient = new JulesApiClient(apiKey, JULES_API_BASE_URL);
-        
+
         // Use refactored API calls
         const session = await apiClient.getSession(sessionId);
         const activities = await apiClient.getActivities(sessionId);
-        
+
         // Show in chat view instead of output channel
         await chatProvider.updateSession(session, activities);
 
@@ -1897,7 +1897,7 @@ export function activate(context: vscode.ExtensionContext) {
       await sendMessageToSession(context, item);
     }
   );
-  
+
   const checkoutBranchDisposable = vscode.commands.registerCommand(
     CHECKOUT_BRANCH_COMMAND,
     async (sessionId?: string) => {
@@ -1944,7 +1944,7 @@ export function activate(context: vscode.ExtensionContext) {
                              return;
                          }
                      }
-                     
+
                      await execAsync(`git fetch origin ${startingBranch}`, { cwd: workspaceFolder.uri.fsPath });
                      await execAsync(`git checkout ${startingBranch}`, { cwd: workspaceFolder.uri.fsPath });
                      vscode.window.showInformationMessage(`Checked out ${startingBranch}`);
