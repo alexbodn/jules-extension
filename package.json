@@ -203,13 +203,29 @@
         "when": "jules-extension.hasSelectedSource"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "jules-sidebar",
+          "title": "Jules",
+          "icon": "icon.png"
+        }
+      ]
+    },
     "views": {
-      "explorer": [
+      "jules-sidebar": [
         {
           "id": "julesSessionsView",
           "name": "Jules Sessions",
           "icon": "$(robot)",
           "contextualTitle": "Jules Sessions"
+        },
+        {
+          "type": "webview",
+          "id": "julesChatView",
+          "name": "Chat",
+          "icon": "$(comment-discussion)",
+          "contextualTitle": "Jules Chat"
         }
       ]
     },
@@ -277,6 +293,7 @@
     "test:unit": "mocha --ui tdd --require source-map-support/register \"out/test/*.unit.test.js\""
   },
   "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
     "@types/sinon": "^17.0.0",
@@ -295,6 +312,7 @@
   },
   "dependencies": {
     "@octokit/rest": "^22.0.1",
-    "is-glob": "^4.0.3"
+    "is-glob": "^4.0.3",
+    "markdown-it": "^14.1.0"
   }
 }

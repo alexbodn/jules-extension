@@ -1,0 +1,200 @@
+body {
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    font-family: var(--vscode-font-family);
+    background-color: var(--vscode-editor-background);
+    color: var(--vscode-editor-foreground);
+}
+
+#app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+#header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background-color: var(--vscode-editor-background);
+    border-bottom: 1px solid var(--vscode-panel-border);
+    flex-shrink: 0;
+}
+
+#header.hidden {
+    display: none;
+}
+
+.title-container {
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+}
+
+#session-icon {
+    margin-right: 8px;
+    font-size: 1.2em;
+}
+
+#session-title {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.actions {
+    display: flex;
+    gap: 4px;
+}
+
+.icon-btn {
+    background: none;
+    border: none;
+    color: var(--vscode-icon-foreground);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.icon-btn:hover {
+    background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+#messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.message {
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 6px;
+    padding: 8px;
+    background-color: var(--vscode-editor-background);
+}
+
+.message.user {
+    background-color: var(--vscode-editor-inactiveSelectionBackground);
+    align-self: flex-end;
+    max-width: 90%;
+}
+
+.message.agent {
+    background-color: var(--vscode-editor-background);
+    align-self: flex-start;
+    max-width: 90%;
+}
+
+.message.info-message {
+    border: none;
+    background-color: transparent;
+    padding: 4px 8px;
+    opacity: 0.8;
+}
+
+.message-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+    font-size: 0.85em;
+    color: var(--vscode-descriptionForeground);
+    user-select: none;
+}
+
+.message-icon {
+    font-size: 1.1em;
+}
+
+.message-content {
+    font-size: 0.95em;
+    line-height: 1.5;
+}
+
+/* Markdown styling overrides/defaults for VS Code look */
+.markdown-body pre {
+    background-color: var(--vscode-textBlockQuote-background);
+    padding: 8px;
+    border-radius: 4px;
+    overflow-x: auto;
+}
+
+.markdown-body code {
+    font-family: var(--vscode-editor-font-family);
+    background-color: var(--vscode-textBlockQuote-background);
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+
+#input-area {
+    padding: 16px;
+    border-top: 1px solid var(--vscode-panel-border);
+    background-color: var(--vscode-editor-background);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+#message-input {
+    width: 100%;
+    min-height: 60px;
+    padding: 8px;
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    color: var(--vscode-input-foreground);
+    background-color: var(--vscode-input-background);
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 2px;
+    resize: vertical;
+}
+
+#message-input:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+    border-color: var(--vscode-focusBorder);
+}
+
+#send-btn {
+    align-self: flex-end;
+    padding: 6px 16px;
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    border-radius: 2px;
+    cursor: pointer;
+    font-family: var(--vscode-font-family);
+}
+
+#send-btn:hover {
+    background-color: var(--vscode-button-hoverBackground);
+}
+
+.welcome-message {
+    text-align: center;
+    color: var(--vscode-descriptionForeground);
+    margin-top: 40px;
+    font-style: italic;
+}
+
+.empty-state {
+    text-align: center;
+    color: var(--vscode-descriptionForeground);
+    font-style: italic;
+    padding: 20px;
+}
+
+/* Collapsible state */
+.collapsed {
+    display: none;
+}
