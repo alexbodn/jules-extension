@@ -1845,11 +1845,11 @@ export function activate(context: vscode.ExtensionContext) {
       }
       try {
         const apiClient = new JulesApiClient(apiKey, JULES_API_BASE_URL);
-        
+
         // Use refactored API calls
         const session = await apiClient.getSession(sessionId);
         const activities = await apiClient.getActivities(sessionId);
-        
+
         // Show in chat view instead of output channel
         await chatProvider.updateSession(session, activities);
 
@@ -1895,67 +1895,6 @@ export function activate(context: vscode.ExtensionContext) {
     "jules-extension.sendMessage",
     async (item?: SessionTreeItem | string) => {
       await sendMessageToSession(context, item);
-    }
-  );
-  
-  const checkoutBranchDisposable = vscode.commands.registerCommand(
-    CHECKOUT_BRANCH_COMMAND,
-    async (sessionId?: string) => {
-        // Fallback to active session
-        const targetSessionId = sessionId || context.globalState.get("active-session-id");
-        if (!targetSessionId) {
-            vscode.window.showErrorMessage("No active session to checkout branch from.");
-            return;
-        }
-
-        const apiKey = await getStoredApiKey(context);
-        if (!apiKey) {
-            return;
-        }
-
-        try {
-            const apiClient = new JulesApiClient(apiKey, JULES_API_BASE_URL);
-            // We need the session details to know the branch
-            // Actually the session object has sourceContext which might have startingBranch.
-            // But usually Jules works on a branch.
-            // Let's fetch session details.
-            const session = await apiClient.getSession(targetSessionId as string);
-            const startingBranch = session.sourceContext?.githubRepoContext?.startingBranch;
-
-            if (startingBranch) {
-                 await vscode.window.withProgress({
-                    location: vscode.ProgressLocation.Notification,
-                    title: `Checking out branch ${startingBranch}...`,
-                    cancellable: false
-                 }, async () => {
-                     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-                     if (!workspaceFolder) {
-                         throw new Error("No workspace folder open.");
-                     }
-                     // Check if clean
-                     const { stdout: status } = await execAsync('git status --porcelain', { cwd: workspaceFolder.uri.fsPath });
-                     if (status.trim().length > 0) {
-                         const choice = await vscode.window.showWarningMessage(
-                             "Your working tree is not clean. Switching branches might fail or require stashing.",
-                             "Switch Anyway",
-                             "Cancel"
-                         );
-                         if (choice !== "Switch Anyway") {
-                             return;
-                         }
-                     }
-                     
-                     await execAsync(`git fetch origin ${startingBranch}`, { cwd: workspaceFolder.uri.fsPath });
-                     await execAsync(`git checkout ${startingBranch}`, { cwd: workspaceFolder.uri.fsPath });
-                     vscode.window.showInformationMessage(`Checked out ${startingBranch}`);
-                 });
-            } else {
-                vscode.window.showErrorMessage("Could not determine branch for this session.");
-            }
-
-        } catch(e: any) {
-             vscode.window.showErrorMessage(`Failed to checkout branch: ${e.message}`);
-        }
     }
   );
 
