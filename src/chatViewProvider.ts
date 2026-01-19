@@ -57,7 +57,7 @@ export class JulesChatViewProvider implements vscode.WebviewViewProvider {
 
         this._currentSessionId = session.name;
         const processedActivities = activities.map(a => this._processActivity(a));
-
+        
         await this._view.webview.postMessage({
             type: 'updateSession',
             session: {
@@ -88,7 +88,7 @@ export class JulesChatViewProvider implements vscode.WebviewViewProvider {
                     return;
                 }
                 const client = this._apiClientFactory(apiKey);
-
+                
                 // Optimistic update
                 if (this._view) {
                     this._view.webview.postMessage({
@@ -110,7 +110,7 @@ export class JulesChatViewProvider implements vscode.WebviewViewProvider {
                 }
 
                 await client.sendMessage(this._currentSessionId, text);
-
+                
                 // Refresh activities to get the agent response
                 await vscode.commands.executeCommand('jules-extension.refreshActivities');
 
@@ -118,12 +118,12 @@ export class JulesChatViewProvider implements vscode.WebviewViewProvider {
                 vscode.window.showErrorMessage(`Failed to send message: ${e.message}`);
             }
         } else {
-             // Create new session flow is handled by extension command usually,
+             // Create new session flow is handled by extension command usually, 
              // but if we want to support it from chat:
              vscode.window.showInformationMessage("Please create a session using the command palette or '+' button first.");
         }
     }
-
+    
     private _processActivity(activity: Activity, overrideText?: string): any {
         let content = '';
         let type = 'info';
@@ -153,21 +153,21 @@ export class JulesChatViewProvider implements vscode.WebviewViewProvider {
             type = 'success';
             icon = '✅';
         } else {
-            // "Unknown activity" or just generic user message?
+            // "Unknown activity" or just generic user message? 
             // In the provided example, user messages show as "Unknown activity" but we want to show text if we had it.
             // Since the API Activity type doesn't seem to have a 'text' field readily available in the types we defined,
             // we might be missing where the user prompt text comes from in the activity list.
             // For now, if originator is user, we'll try to show generic, or if we can find text.
-            // *Wait*, the memory/example showed "Unknown activity" for user.
+            // *Wait*, the memory/example showed "Unknown activity" for user. 
             // The prompt says "adding to conversation the last jules messages from the api".
             // It also says "data is currently sent to output... we'll take the same data".
             // If the activity data doesn't contain the text, we can't show it.
             // However, the prompt says "bigger messages from either side should parse markdown".
-            // This implies we SHOULD have the text.
+            // This implies we SHOULD have the text. 
             // Let's assume for now that `activity` object might have more fields or we rely on what we have.
             // If `progressUpdated` description is markdown, we render it.
-
-            content = 'Unknown activity';
+            
+            content = 'Unknown activity'; 
         }
 
         // Render markdown for content
@@ -217,7 +217,7 @@ export class JulesChatViewProvider implements vscode.WebviewViewProvider {
                             </button>
                         </div>
                     </div>
-
+                    
                     <div id="messages">
                         <div class="welcome-message">
                             Select a session from the "Jules Sessions" view to start chatting.
