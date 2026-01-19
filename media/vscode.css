@@ -1,0 +1,15 @@
+/* Minimal VS Code style variables fallback/setup if needed */
+:root {
+    --container-paddding: 20px;
+    --input-padding-vertical: 6px;
+    --input-padding-horizontal: 4px;
+    --input-margin-vertical: 4px;
+    --input-margin-horizontal: 0;
+}
+
+body {
+    color: var(--vscode-editor-foreground);
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    font-weight: var(--vscode-font-weight);
+}

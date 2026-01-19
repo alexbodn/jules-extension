@@ -9,6 +9,7 @@ import { parseGitHubUrl } from "./githubUtils";
 import { GitHubAuth } from './githubAuth';
 import { promisify } from 'util';
 import { exec } from 'child_process';
+import { JulesChatViewProvider } from './chatViewProvider'; // Import chat provider
 
 const execAsync = promisify(exec);
 import { SourcesCache, isCacheValid } from './cache';
@@ -20,6 +21,7 @@ import { fetchWithTimeout } from './fetchUtils';
 const JULES_API_BASE_URL = "https://jules.googleapis.com/v1alpha";
 const VIEW_DETAILS_ACTION = 'View Details';
 const SHOW_ACTIVITIES_COMMAND = 'jules-extension.showActivities';
+const CHECKOUT_BRANCH_COMMAND = 'jules-extension.checkoutBranch';
 
 // Plan notification display constants
 const MAX_PLAN_STEPS_IN_NOTIFICATION = 5;
@@ -1416,6 +1418,12 @@ export function activate(context: vscode.ExtensionContext) {
   });
   console.log("Jules: TreeView created");
 
+  // Register Chat View Provider
+  const chatProvider = new JulesChatViewProvider(context.extensionUri, context, (apiKey) => new JulesApiClient(apiKey, JULES_API_BASE_URL));
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(JulesChatViewProvider.viewType, chatProvider)
+  );
+
   // ステータスバーアイテム作成
   const statusBarItem = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Left,
@@ -1780,6 +1788,9 @@ export function activate(context: vscode.ExtensionContext) {
             vscode.window.showInformationMessage(
               `Session created: ${session.name}`
             );
+
+            // Automatically open chat view
+            await vscode.commands.executeCommand("jules-extension.showActivities", session.name);
           }
         );
       } catch (error) {
@@ -1833,83 +1844,29 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
       try {
-        const sessionResponse = await fetchWithTimeout(
-          `${JULES_API_BASE_URL}/${sessionId}`,
-          {
-            method: "GET",
-            headers: {
-              "X-Goog-Api-Key": apiKey,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-        if (!sessionResponse.ok) {
-          const errorText = await sessionResponse.text();
-          vscode.window.showErrorMessage(
-            `Session not found: ${sessionResponse.status} ${sessionResponse.statusText} - ${errorText}`
-          );
-          return;
-        }
-        const session = (await sessionResponse.json()) as Session;
-        const response = await fetchWithTimeout(
-          `${JULES_API_BASE_URL}/${sessionId}/activities`,
-          {
-            method: "GET",
-            headers: {
-              "X-Goog-Api-Key": apiKey,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-        if (!response.ok) {
-          const errorText = await response.text();
-          vscode.window.showErrorMessage(
-            `Failed to fetch activities: ${response.status} ${response.statusText} - ${errorText}`
-          );
-          return;
-        }
-        const data = (await response.json()) as ActivitiesResponse;
-        if (!data.activities || !Array.isArray(data.activities)) {
-          vscode.window.showErrorMessage("Invalid response format from API.");
-          return;
-        }
-        activitiesChannel.clear();
-        activitiesChannel.show();
-        activitiesChannel.appendLine(`Activities for session: ${sessionId}`);
-        activitiesChannel.appendLine("---");
-        if (data.activities.length === 0) {
-          activitiesChannel.appendLine("No activities found for this session.");
-        } else {
-          let planDetected = false;
-          data.activities.forEach((activity) => {
-            const icon = getActivityIcon(activity);
-            const timestamp = new Date(activity.createTime).toLocaleString();
-            let message = "";
-            if (activity.planGenerated) {
-              message = `Plan generated: ${activity.planGenerated.plan?.title || "Plan"
-                }`;
-              planDetected = true;
-            } else if (activity.planApproved) {
-              message = `Plan approved: ${activity.planApproved.planId}`;
-            } else if (activity.progressUpdated) {
-              message = `Progress: ${activity.progressUpdated.title}${activity.progressUpdated.description
-                ? " - " + activity.progressUpdated.description
-                : ""
-                }`;
-            } else if (activity.sessionCompleted) {
-              message = "Session completed";
-            } else {
-              message = "Unknown activity";
-            }
-            activitiesChannel.appendLine(
-              `${icon} ${timestamp} (${activity.originator}): ${message}`
-            );
-          });
-        }
+        const apiClient = new JulesApiClient(apiKey, JULES_API_BASE_URL);
+
+        // Use refactored API calls
+        const session = await apiClient.getSession(sessionId);
+        const activities = await apiClient.getActivities(sessionId);
+
+        // Show in chat view instead of output channel
+        await chatProvider.updateSession(session, activities);
+
+        // Also reveal the chat view
+        // Note: 'julesChatView' matches the ID in package.json
+        await vscode.commands.executeCommand('julesChatView.focus');
+
+        /* Legacy output channel logic preserved or commented out if no longer needed
+           Keeping it minimal if you want backward compat but the user asked for panel.
+           The requirement is "create jules chat in panel".
+        */
+
         await context.globalState.update("active-session-id", sessionId);
       } catch (error) {
+        const errMsg = error instanceof Error ? error.message : String(error);
         vscode.window.showErrorMessage(
-          "Failed to fetch activities. Please check your internet connection."
+          `Failed to fetch activities: ${errMsg}`
         );
       }
     }
@@ -1938,6 +1895,67 @@ export function activate(context: vscode.ExtensionContext) {
     "jules-extension.sendMessage",
     async (item?: SessionTreeItem | string) => {
       await sendMessageToSession(context, item);
+    }
+  );
+
+  const checkoutBranchDisposable = vscode.commands.registerCommand(
+    CHECKOUT_BRANCH_COMMAND,
+    async (sessionId?: string) => {
+        // Fallback to active session
+        const targetSessionId = sessionId || context.globalState.get("active-session-id");
+        if (!targetSessionId) {
+            vscode.window.showErrorMessage("No active session to checkout branch from.");
+            return;
+        }
+
+        const apiKey = await getStoredApiKey(context);
+        if (!apiKey) {
+            return;
+        }
+
+        try {
+            const apiClient = new JulesApiClient(apiKey, JULES_API_BASE_URL);
+            // We need the session details to know the branch
+            // Actually the session object has sourceContext which might have startingBranch.
+            // But usually Jules works on a branch.
+            // Let's fetch session details.
+            const session = await apiClient.getSession(targetSessionId as string);
+            const startingBranch = session.sourceContext?.githubRepoContext?.startingBranch;
+
+            if (startingBranch) {
+                 await vscode.window.withProgress({
+                    location: vscode.ProgressLocation.Notification,
+                    title: `Checking out branch ${startingBranch}...`,
+                    cancellable: false
+                 }, async () => {
+                     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+                     if (!workspaceFolder) {
+                         throw new Error("No workspace folder open.");
+                     }
+                     // Check if clean
+                     const { stdout: status } = await execAsync('git status --porcelain', { cwd: workspaceFolder.uri.fsPath });
+                     if (status.trim().length > 0) {
+                         const choice = await vscode.window.showWarningMessage(
+                             "Your working tree is not clean. Switching branches might fail or require stashing.",
+                             "Switch Anyway",
+                             "Cancel"
+                         );
+                         if (choice !== "Switch Anyway") {
+                             return;
+                         }
+                     }
+
+                     await execAsync(`git fetch origin ${startingBranch}`, { cwd: workspaceFolder.uri.fsPath });
+                     await execAsync(`git checkout ${startingBranch}`, { cwd: workspaceFolder.uri.fsPath });
+                     vscode.window.showInformationMessage(`Checked out ${startingBranch}`);
+                 });
+            } else {
+                vscode.window.showErrorMessage("Could not determine branch for this session.");
+            }
+
+        } catch(e: any) {
+             vscode.window.showErrorMessage(`Failed to checkout branch: ${e.message}`);
+        }
     }
   );
 
@@ -2155,7 +2173,8 @@ export function activate(context: vscode.ExtensionContext) {
     setGithubTokenDisposable,
     setGitHubPatDisposable,
     clearCacheDisposable,
-    openInWebAppDisposable
+    openInWebAppDisposable,
+    checkoutBranchDisposable
   );
 }
 
@@ -2163,4 +2182,3 @@ export function activate(context: vscode.ExtensionContext) {
 export function deactivate() {
   stopAutoRefresh();
 }
-
