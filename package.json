@@ -203,17 +203,8 @@
         "when": "jules-extension.hasSelectedSource"
       }
     ],
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "jules-sidebar",
-          "title": "Jules",
-          "icon": "icon.png"
-        }
-      ]
-    },
     "views": {
-      "jules-sidebar": [
+      "explorer": [
         {
           "id": "julesSessionsView",
           "name": "Jules Sessions",
@@ -223,7 +214,7 @@
         {
           "type": "webview",
           "id": "julesChatView",
-          "name": "Chat",
+          "name": "Jules Chat",
           "icon": "$(comment-discussion)",
           "contextualTitle": "Jules Chat"
         }

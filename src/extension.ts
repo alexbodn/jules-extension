@@ -1789,7 +1789,7 @@ export function activate(context: vscode.ExtensionContext) {
               `Session created: ${session.name}`
             );
 
-            // Automatically open chat view
+            // Automatically refresh activities to update chat view
             await vscode.commands.executeCommand("jules-extension.showActivities", session.name);
           }
         );
@@ -1855,14 +1855,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         // Also reveal the chat view
         // Note: 'julesChatView' matches the ID in package.json
-        try {
-          await vscode.commands.executeCommand('julesChatView.focus');
-        } catch (error) {
-          // If the view is not yet visible or registered, focus might fail.
-          // Fallback to ensuring the view container is visible if possible, or just ignore.
-          // Note: WebviewViewProvider does not have a public .show() method from the extension side easily.
-          console.warn('Failed to focus julesChatView:', error);
-        }
+        // Focus call removed as per user request to avoid errors if view is not visible/registered.
 
         /* Legacy output channel logic preserved or commented out if no longer needed
            Keeping it minimal if you want backward compat but the user asked for panel.
