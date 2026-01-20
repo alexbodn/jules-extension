@@ -155,3 +155,4 @@ Please check the Issue Tracker and Pull Requests.
 ## 📝 License
 
 [MIT](LICENSE)
+<!-- bump version 1.1.10 -->
