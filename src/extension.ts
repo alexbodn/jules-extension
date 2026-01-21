@@ -9,7 +9,8 @@ import { parseGitHubUrl } from "./githubUtils";
 import { GitHubAuth } from './githubAuth';
 import { promisify } from 'util';
 import { exec } from 'child_process';
-import { JulesChatViewProvider } from './chatViewProvider'; // Import chat provider
+import { JulesChatViewProvider } from './chatViewProvider';
+import { JulesSourcesProvider, SourceTreeItem } from './sourcesProvider'; // Import sources provider
 
 const execAsync = promisify(exec);
 import { SourcesCache, isCacheValid } from './cache';
@@ -1418,6 +1419,14 @@ export function activate(context: vscode.ExtensionContext) {
   });
   console.log("Jules: TreeView created");
 
+  // Register Sources View Provider
+  const sourcesProvider = new JulesSourcesProvider(context, (apiKey) => new JulesApiClient(apiKey, JULES_API_BASE_URL));
+  const sourcesTreeView = vscode.window.createTreeView("julesSourcesView", {
+    treeDataProvider: sourcesProvider,
+    showCollapseAll: false
+  });
+  context.subscriptions.push(sourcesTreeView);
+
   // Register Chat View Provider
   const chatProvider = new JulesChatViewProvider(context.extensionUri, context, (apiKey) => new JulesApiClient(apiKey, JULES_API_BASE_URL));
   context.subscriptions.push(
@@ -1505,87 +1514,48 @@ export function activate(context: vscode.ExtensionContext) {
     }
   );
 
+  // Command to select source from Tree View
+  const selectSourceFromViewDisposable = vscode.commands.registerCommand(
+    "jules-extension.selectSourceFromView",
+    async (source: SourceType) => {
+        if (!source) return;
+
+        await context.globalState.update("selected-source", source);
+        vscode.commands.executeCommand('setContext', 'jules-extension.hasSelectedSource', true);
+
+        // Extract repo name for display
+        const repoMatch = source.name?.match(/sources\/github\/(.+)/);
+        const repoName = repoMatch ? repoMatch[1] : (source.name || source.id || "Unknown");
+
+        vscode.window.showInformationMessage(`Selected source: ${repoName}`);
+        updateStatusBar(context, statusBarItem);
+
+        sessionsProvider.refresh();
+        chatProvider.reset();
+        sourcesProvider.refresh(); // Refresh to update checkmark icon
+    }
+  );
+  context.subscriptions.push(selectSourceFromViewDisposable);
+
   const listSourcesDisposable = vscode.commands.registerCommand(
     "jules-extension.listSources",
     async () => {
-      const apiKey = await getStoredApiKey(context);
-      if (!apiKey) {
-        return;
-      }
-
-      isFetchingSensitiveData = true;
-      resetAutoRefresh(context, sessionsProvider);
-
-      try {
-        const cacheKey = 'jules.sources';
-        const cached = context.globalState.get<SourcesCache>(cacheKey);
-        let sources: SourceType[];
-
-        if (cached && isCacheValid(cached.timestamp)) {
-          logChannel.appendLine('Using cached sources');
-          sources = cached.sources;
-        } else {
-          sources = await vscode.window.withProgress({
-            location: vscode.ProgressLocation.Notification,
-            title: 'Fetching sources...',
-            cancellable: false
-          }, async (progress) => {
-            const response = await fetchWithTimeout(`${JULES_API_BASE_URL}/sources`, {
-              method: "GET",
-              headers: {
-                "X-Goog-Api-Key": apiKey,
-                "Content-Type": "application/json",
-              },
-            });
-            if (!response.ok) {
-              throw new Error(`Failed to fetch sources: ${response.status} ${response.statusText}`);
-            }
-            const data = (await response.json()) as SourcesResponse;
-            if (!data.sources || !Array.isArray(data.sources)) {
-              throw new Error("Invalid response format from API.");
-            }
-            await context.globalState.update(cacheKey, { sources: data.sources, timestamp: Date.now() });
-            logChannel.appendLine(`Fetched ${data.sources.length} sources`);
-            return data.sources;
-          });
-        }
-
-        const items: SourceQuickPickItem[] = sources.map((source) => {
-          // Extract repository name (e.g., "sources/github/owner/repo" -> "owner/repo")
-          const repoMatch = source.name?.match(/sources\/github\/(.+)/);
-          const repoName = repoMatch ? repoMatch[1] : (source.name || source.id || "Unknown");
-          
-          return {
-            label: source.isPrivate === true ? `$(lock) ${repoName}` : repoName,
-            description: getSourceDescription(source),
-            detail: source.description || "",
-            source: source,
-          };
-        });
-        const selected: SourceQuickPickItem | undefined =
-          await vscode.window.showQuickPick(items, {
-            placeHolder: "Select a Jules Source",
-          });
-        if (selected) {
-          await context.globalState.update("selected-source", selected.source);
-          vscode.commands.executeCommand('setContext', 'jules-extension.hasSelectedSource', true);
-          vscode.window.showInformationMessage(
-            `Selected source: ${selected.label}`
-          );
-          updateStatusBar(context, statusBarItem);
-          sessionsProvider.refresh();
-          chatProvider.reset();
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown error occurred.";
-        logChannel.appendLine(`Failed to list sources: ${message}`);
-        vscode.window.showErrorMessage(`Failed to list sources: ${message}`);
-      } finally {
-        isFetchingSensitiveData = false;
-        resetAutoRefresh(context, sessionsProvider);
-      }
+      // Refresh sources view directly if available, otherwise fallback to QuickPick logic
+      // But user requested "dropdown" (Tree View). We keep listSources as a way to refresh/show the view?
+      // Actually, listSources is bound to the status bar. It should probably focus the Sources view now.
+      await vscode.commands.executeCommand('julesSourcesView.focus');
+      // Also triggering refresh to be safe
+      sourcesProvider.refresh();
     }
   );
+
+  // Re-register legacy listSources command logic under a different name if needed,
+  // or just keep it as "Refresh Sources" for the view title action.
+  const refreshSourcesDisposable = vscode.commands.registerCommand(
+    "jules-extension.refreshSources",
+    () => sourcesProvider.refresh()
+  );
+  context.subscriptions.push(refreshSourcesDisposable);
 
   const createSessionDisposable = vscode.commands.registerCommand(
     "jules-extension.createSession",
