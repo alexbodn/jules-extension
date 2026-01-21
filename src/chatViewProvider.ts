@@ -77,6 +77,13 @@ export class JulesChatViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
+    public reset() {
+        this._currentSessionId = undefined;
+        if (this._view) {
+            this._view.webview.postMessage({ type: 'reset' });
+        }
+    }
+
     private async _handleSendMessage(text: string) {
         if (!text.trim()) return;
 

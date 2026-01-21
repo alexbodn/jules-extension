@@ -1,5 +1,7 @@
 (function () {
     const vscode = acquireVsCodeApi();
+    const sidebar = document.getElementById('sidebar');
+    const mainChat = document.getElementById('main-chat');
     const messagesContainer = document.getElementById('messages');
     const input = document.getElementById('message-input');
     const sendBtn = document.getElementById('send-btn');
@@ -8,20 +10,45 @@
     const header = document.getElementById('header');
     const sessionTitle = document.getElementById('session-title');
 
-    let currentSession = null;
+    // State management
+    // sessions: Map<string, { session: object, activities: array }>
+    let sessions = new Map();
+    let currentSessionId = null;
+
+    // Initialize from persisted state if available
+    const previousState = vscode.getState();
+    if (previousState && previousState.sessions) {
+        sessions = new Map(previousState.sessions);
+        currentSessionId = previousState.currentSessionId;
+        renderSidebar();
+        if (currentSessionId) {
+            renderSession(currentSessionId);
+        }
+    }
 
     window.addEventListener('message', event => {
         const message = event.data;
         switch (message.type) {
             case 'updateSession':
-                updateSession(message.session, message.activities);
+                handleUpdateSession(message.session, message.activities);
                 break;
             case 'clearSession':
-                clearSession();
+                handleClearSession();
+                break;
+            case 'reset':
+                handleReset();
                 break;
             case 'appendActivity':
-                appendActivity(message.activity);
-                scrollToBottom();
+                if (currentSessionId) {
+                    const sessionData = sessions.get(currentSessionId);
+                    if (sessionData) {
+                        sessionData.activities.push(message.activity);
+                        saveState();
+                        // Only append if currently viewing
+                        appendActivity(message.activity);
+                        scrollToBottom();
+                    }
+                }
                 break;
         }
     });
@@ -42,7 +69,14 @@
     });
 
     closeBtn.addEventListener('click', () => {
-        vscode.postMessage({ type: 'closeSession' });
+        if (currentSessionId) {
+            sessions.delete(currentSessionId);
+            currentSessionId = null;
+            saveState();
+            renderSidebar();
+            renderEmptyState();
+            vscode.postMessage({ type: 'closeSession' });
+        }
     });
 
     function sendMessage() {
@@ -53,15 +87,88 @@
         }
     }
 
-    function updateSession(session, activities) {
-        currentSession = session;
+    function handleUpdateSession(session, activities) {
+        // Update or add session
+        sessions.set(session.name, {
+            session: session,
+            activities: activities || []
+        });
+
+        // Switch to it
+        currentSessionId = session.name;
+
+        saveState();
+        renderSidebar();
+        renderSession(currentSessionId);
+    }
+
+    function handleClearSession() {
+        currentSessionId = null;
+        saveState();
+        renderSidebar();
+        renderEmptyState();
+    }
+
+    function handleReset() {
+        sessions.clear();
+        currentSessionId = null;
+        saveState();
+        renderSidebar();
+        renderEmptyState();
+    }
+
+    function saveState() {
+        vscode.setState({
+            sessions: Array.from(sessions.entries()),
+            currentSessionId: currentSessionId
+        });
+    }
+
+    function generateColor(str) {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            hash = str.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
+        return '#' + '00000'.substring(0, 6 - c.length) + c;
+    }
+
+    function renderSidebar() {
+        sidebar.innerHTML = '';
+
+        sessions.forEach((data, id) => {
+            const icon = document.createElement('div');
+            icon.className = 'session-icon';
+            if (id === currentSessionId) {
+                icon.classList.add('active');
+            }
+
+            icon.style.backgroundColor = generateColor(id);
+            icon.title = data.session.title || id;
+            icon.innerText = '🤖';
+
+            icon.onclick = () => {
+                currentSessionId = id;
+                saveState();
+                renderSidebar();
+                renderSession(id);
+            };
+
+            sidebar.appendChild(icon);
+        });
+    }
+
+    function renderSession(sessionId) {
+        const data = sessions.get(sessionId);
+        if (!data) return;
+
         header.classList.remove('hidden');
-        sessionTitle.innerText = session.title || session.name;
+        sessionTitle.innerText = data.session.title || data.session.name;
 
         messagesContainer.innerHTML = ''; // Clear existing
 
-        if (activities && activities.length > 0) {
-            activities.forEach(activity => appendActivity(activity));
+        if (data.activities && data.activities.length > 0) {
+            data.activities.forEach(activity => appendActivity(activity));
         } else {
             const empty = document.createElement('div');
             empty.className = 'empty-state';
@@ -72,10 +179,9 @@
         scrollToBottom();
     }
 
-    function clearSession() {
-        currentSession = null;
+    function renderEmptyState() {
         header.classList.add('hidden');
-        messagesContainer.innerHTML = '<div class="welcome-message">Select a session from the "Jules Sessions" view to start chatting.</div>';
+        messagesContainer.innerHTML = '<div class="welcome-message">Select a session from the side bar or the "Jules Sessions" view to start chatting.</div>';
     }
 
     function appendActivity(activity) {
@@ -102,12 +208,8 @@
         contentDiv.className = 'message-content markdown-body';
         contentDiv.innerHTML = activity.renderedContent || '';
 
-        // If it's a "progress" or "info" type, maybe collapse it?
-        // For now, let's make progress details collapsible if they are long?
-        // Or just keep them as is. The prompt asked to "expand / collapse little info messages".
         if (activity.displayType === 'progress' || activity.displayType === 'info') {
              msgDiv.classList.add('info-message');
-             // Add a toggle?
              headerDiv.style.cursor = 'pointer';
              headerDiv.onclick = () => {
                  contentDiv.classList.toggle('collapsed');
@@ -122,5 +224,12 @@
 
     function scrollToBottom() {
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    if (currentSessionId) {
+        renderSidebar();
+        renderSession(currentSessionId);
+    } else {
+        renderEmptyState();
     }
 }());

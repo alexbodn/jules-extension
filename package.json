@@ -203,8 +203,17 @@
         "when": "jules-extension.hasSelectedSource"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "jules-sidebar",
+          "title": "Jules",
+          "icon": "icon.png"
+        }
+      ]
+    },
     "views": {
-      "explorer": [
+      "jules-sidebar": [
         {
           "id": "julesSessionsView",
           "name": "Jules Sessions",
