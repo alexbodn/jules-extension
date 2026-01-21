@@ -1006,8 +1006,8 @@ export class JulesSessionsProvider
         void this._refreshBranchCacheInBackground(apiKey);
       }
 
-      // Only fire event if meaningful change occurred
-      if (sessionsChanged || statesChanged) {
+      // Only fire event if meaningful change occurred, or if it's a manual refresh (to ensure view updates on context change)
+      if (sessionsChanged || statesChanged || !isBackground) {
         this._onDidChangeTreeData.fire();
       } else {
         logChannel.appendLine("Jules: No view updates required.");
