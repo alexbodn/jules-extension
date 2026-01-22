@@ -966,6 +966,12 @@ export class JulesSessionsProvider
 
       logChannel.appendLine(`Jules: Found ${allSessions.length} total sessions after pagination`);
 
+      // Check for missing sourceContext
+      const sessionsWithoutSource = allSessions.filter(s => !s.sourceContext?.source);
+      if (sessionsWithoutSource.length > 0) {
+        logChannel.appendLine(`Jules: Warning - ${sessionsWithoutSource.length} sessions are missing sourceContext (e.g. ${sessionsWithoutSource[0].name})`);
+      }
+
       const allSessionsMapped = allSessions.map((session) => ({
         ...session,
         rawState: session.state,
@@ -1125,13 +1131,15 @@ export class JulesSessionsProvider
     }
 
     // Now, use the cache to build the tree
-    let filteredSessions = this.sessionsCache.filter(
+    const allCache = this.sessionsCache;
+    let filteredSessions = allCache.filter(
       (session) =>
         (session as any).sourceContext?.source === selectedSource.name
     );
 
+    const sourceMatchCount = filteredSessions.length;
     console.log(
-      `Jules: Found ${filteredSessions.length} sessions for the selected source from cache`
+      `Jules: Filtering sessions - Total Cached: ${allCache.length}, Matched Source (${selectedSource.name}): ${sourceMatchCount}`
     );
 
     // Filter out sessions with closed PRs if the setting is enabled
