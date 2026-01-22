@@ -821,6 +821,7 @@ function resetAutoRefresh(
 
 interface SessionsResponse {
   sessions: Session[];
+  nextPageToken?: string;
 }
 
 interface PlanStep {
@@ -908,28 +909,49 @@ export class JulesSessionsProvider
         return;
       }
 
-      const response = await fetchWithTimeout(`${JULES_API_BASE_URL}/sessions`, {
-        method: "GET",
-        headers: {
-          "X-Goog-Api-Key": apiKey,
-          "Content-Type": "application/json",
-        },
-      });
+      let allSessions: Session[] = [];
+      let nextPageToken: string | undefined = undefined;
+      let pageCount = 0;
+      const MAX_PAGES = 10; // Safety limit
 
-      if (!response.ok) {
-        const errorMsg = `Failed to fetch sessions: ${response.status} ${response.statusText}`;
-        logChannel.appendLine(`Jules: ${errorMsg}`);
-        if (!isBackground) {
-          vscode.window.showErrorMessage(errorMsg);
+      do {
+        const url = new URL(`${JULES_API_BASE_URL}/sessions`);
+        if (nextPageToken) {
+          url.searchParams.append('pageToken', nextPageToken);
         }
-        this.sessionsCache = [];
-        this._onDidChangeTreeData.fire();
-        return;
-      }
 
-      const data = (await response.json()) as SessionsResponse;
-      if (!data.sessions || !Array.isArray(data.sessions)) {
-        logChannel.appendLine("Jules: No sessions found or invalid response format");
+        const response = await fetchWithTimeout(url.toString(), {
+          method: "GET",
+          headers: {
+            "X-Goog-Api-Key": apiKey,
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (!response.ok) {
+          const errorMsg = `Failed to fetch sessions: ${response.status} ${response.statusText}`;
+          logChannel.appendLine(`Jules: ${errorMsg}`);
+          if (!isBackground && pageCount === 0) {
+            vscode.window.showErrorMessage(errorMsg);
+          }
+          // If subsequent page fails, we still show what we have so far
+          break;
+        }
+
+        const data = (await response.json()) as SessionsResponse;
+        if (data.sessions && Array.isArray(data.sessions)) {
+          allSessions = allSessions.concat(data.sessions);
+        }
+
+        nextPageToken = data.nextPageToken;
+        pageCount++;
+
+        logChannel.appendLine(`Jules: Fetched page ${pageCount}, accumulated ${allSessions.length} sessions.`);
+
+      } while (nextPageToken && pageCount < MAX_PAGES);
+
+      if (allSessions.length === 0) {
+        logChannel.appendLine("Jules: No sessions found.");
         this.sessionsCache = [];
         this._onDidChangeTreeData.fire();
         return;
@@ -937,14 +959,14 @@ export class JulesSessionsProvider
 
       // デバッグ: APIレスポンスの生データを確認
       logChannel.appendLine(`Jules: Debug - Raw API response sample (first 3 sessions):`);
-      data.sessions.slice(0, 3).forEach((s: any, i: number) => {
+      allSessions.slice(0, 3).forEach((s: any, i: number) => {
         logChannel.appendLine(`  [${i}] name=${s.name}, state=${s.state}, title=${sanitizeForLogging(s.title)}`);
         logChannel.appendLine(`      updateTime=${s.updateTime}`);
       });
 
-      logChannel.appendLine(`Jules: Found ${data.sessions.length} total sessions`);
+      logChannel.appendLine(`Jules: Found ${allSessions.length} total sessions after pagination`);
 
-      const allSessionsMapped = data.sessions.map((session) => ({
+      const allSessionsMapped = allSessions.map((session) => ({
         ...session,
         rawState: session.state,
         state: mapApiStateToSessionState(session.state),

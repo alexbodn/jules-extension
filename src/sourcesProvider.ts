@@ -30,43 +30,8 @@ export class JulesSourcesProvider implements vscode.TreeDataProvider<SourceTreeI
         }
 
         try {
-            // Check cache first? logic reused from listSources logic in extension.ts could be moved here or duplicated/imported.
-            // For simplicity and robustness, let's fetch fresh or use extension's cache if accessible.
-            // Accessing globalState directly.
-
-            // Note: Ideally we share the fetch logic. For now, calling API directly.
             const client = this.apiClientFactory(apiKey);
-            // We need a listSources method on client or fetch manually.
-            // JulesApiClient doesn't have listSources yet (only getSource).
-            // Let's implement listSources in JulesApiClient later or fetch here.
-            // But wait, the extension already fetches sources.
-
-            // Let's rely on the cache populated by the extension or fetch if missing?
-            // Actually, best to just fetch using client.
-            // I'll add listSources to JulesApiClient in the next step or mock it here.
-            // Wait, I can't modify JulesApiClient in this step easily without context switch.
-            // I'll assume I can add it or use raw fetch.
-            // Let's check JulesApiClient again.
-
-            // ... checking memory ... JulesApiClient has getSource.
-            // I will add listSources to JulesApiClient.
-
-            // Placeholder: Assume extension logic handles cache for now, or just fetch.
-            // I'll implement fetch here to be self-contained.
-
-            const response = await fetch("https://jules.googleapis.com/v1alpha/sources", {
-                headers: {
-                    "X-Goog-Api-Key": apiKey,
-                    "Content-Type": "application/json",
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error(`Failed: ${response.status}`);
-            }
-
-            const data = (await response.json()) as any;
-            const sources = data.sources || [];
+            const sources = await client.listSources();
 
             const selectedSource = this.context.globalState.get<SourceType>("selected-source");
 

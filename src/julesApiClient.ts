@@ -32,6 +32,11 @@ export class JulesApiClient {
         return this.request<SourceType>(`/${sourceName}`);
     }
 
+    async listSources(): Promise<SourceType[]> {
+        const data = await this.request<{ sources: SourceType[] }>('/sources');
+        return data.sources || [];
+    }
+
     async getSession(sessionId: string): Promise<Session> {
         return this.request<Session>(`/${sessionId}`);
     }

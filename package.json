@@ -2,10 +2,10 @@
   "name": "jules-extension",
   "displayName": "Jules Extension",
   "description": "Control Google Jules AI coding agent directly from VS Code",
-  "version": "1.1.13",
+  "version": "1.1.14",
   "publisher": "HirokiMukai",
   "license": "MIT",
-  "icon": "icon.png",
+  "icon": "media/icon.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/is0692vs/jules-extension.git"
@@ -208,7 +208,7 @@
         {
           "id": "jules-sidebar",
           "title": "Jules",
-          "icon": "icon.png"
+          "icon": "media/icon.png"
         }
       ]
     },
