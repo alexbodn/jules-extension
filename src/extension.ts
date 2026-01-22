@@ -917,8 +917,6 @@ export class JulesSessionsProvider
       do {
         const url = new URL(`${JULES_API_BASE_URL}/sessions`);
         url.searchParams.append('pageSize', '100');
-        url.searchParams.append('orderBy', 'updateTime desc');
-        url.searchParams.append('_t', Date.now().toString());
 
         if (nextPageToken) {
           url.searchParams.append('pageToken', nextPageToken);
