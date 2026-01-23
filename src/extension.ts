@@ -960,9 +960,15 @@ export class JulesSessionsProvider
       }
 
       // デバッグ: APIレスポンスの生データを確認
+      logChannel.appendLine(`Jules: Debug - Raw API response sample (first session full):`);
+      if (allSessions.length > 0) {
+        logChannel.appendLine(JSON.stringify(allSessions[0], null, 2));
+      }
+
       logChannel.appendLine(`Jules: Debug - Raw API response sample (first 3 sessions):`);
       allSessions.slice(0, 3).forEach((s: any, i: number) => {
-        logChannel.appendLine(`  [${i}] name=${s.name}, state=${s.state}, title=${sanitizeForLogging(s.title)}`);
+        const source = s.sourceContext?.source || 'undefined';
+        logChannel.appendLine(`  [${i}] name=${s.name}, state=${s.state}, source=${source}, title=${sanitizeForLogging(s.title)}`);
         logChannel.appendLine(`      updateTime=${s.updateTime}`);
       });
 
@@ -1143,6 +1149,11 @@ export class JulesSessionsProvider
     console.log(
       `Jules: Filtering sessions - Total Cached: ${allCache.length}, Matched Source (${selectedSource.name}): ${sourceMatchCount}`
     );
+
+    if (sourceMatchCount === 0 && allCache.length > 0) {
+      const firstSession = allCache[0] as any;
+      console.log(`Jules: Filter mismatch example - Session Source: '${firstSession.sourceContext?.source}' vs Selected Source: '${selectedSource.name}'`);
+    }
 
     // Filter out sessions with closed PRs if the setting is enabled
     const hideClosedPRs = vscode.workspace
