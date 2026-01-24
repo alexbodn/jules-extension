@@ -1140,19 +1140,31 @@ export class JulesSessionsProvider
 
     // Now, use the cache to build the tree
     const allCache = this.sessionsCache;
+
+    // Normalize source string for comparison (remove 'sources/github/' prefix)
+    const normalizeSource = (s: string | undefined): string => {
+      if (!s) return '';
+      return s.replace(/^sources\/github\//, '');
+    };
+
+    const selectedSourceNameNormalized = normalizeSource(selectedSource.name);
+
     let filteredSessions = allCache.filter(
-      (session) =>
-        (session as any).sourceContext?.source === selectedSource.name
+      (session) => {
+        const sessionSource = (session as any).sourceContext?.source;
+        return normalizeSource(sessionSource) === selectedSourceNameNormalized;
+      }
     );
 
     const sourceMatchCount = filteredSessions.length;
     console.log(
-      `Jules: Filtering sessions - Total Cached: ${allCache.length}, Matched Source (${selectedSource.name}): ${sourceMatchCount}`
+      `Jules: Filtering sessions - Total Cached: ${allCache.length}, Matched Source (${selectedSource.name} -> ${selectedSourceNameNormalized}): ${sourceMatchCount}`
     );
 
     if (sourceMatchCount === 0 && allCache.length > 0) {
       const firstSession = allCache[0] as any;
-      console.log(`Jules: Filter mismatch example - Session Source: '${firstSession.sourceContext?.source}' vs Selected Source: '${selectedSource.name}'`);
+      const firstSessionSource = firstSession.sourceContext?.source;
+      console.log(`Jules: Filter mismatch example - Session Source: '${firstSessionSource}' (norm: ${normalizeSource(firstSessionSource)}) vs Selected Source: '${selectedSource.name}' (norm: ${selectedSourceNameNormalized})`);
     }
 
     // Filter out sessions with closed PRs if the setting is enabled
