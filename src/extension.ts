@@ -1176,16 +1176,25 @@ export class JulesSessionsProvider
       // We no longer need to check PR status on every render.
       // The `isTerminated` flag in `previousSessionStates` handles this.
       const beforeFilterCount = filteredSessions.length;
+      const terminatedSessions: string[] = [];
+
       filteredSessions = filteredSessions.filter((session) => {
         const prevState = previousSessionStates.get(session.name);
+        const isTerminated = prevState?.isTerminated;
+
+        if (isTerminated) {
+            terminatedSessions.push(`${session.name} (${sanitizeForLogging(session.title)})`);
+        }
+
         // Hide if the session is marked as terminated.
-        return !prevState?.isTerminated;
+        return !isTerminated;
       });
       const filteredCount = beforeFilterCount - filteredSessions.length;
       if (filteredCount > 0) {
         console.log(
-          `Jules: Filtered out ${filteredCount} terminated sessions (${beforeFilterCount} -> ${filteredSessions.length})`
+          `Jules: Filtered out ${filteredCount} terminated sessions (Closed PRs/Cancelled/Failed):`
         );
+        terminatedSessions.forEach(s => console.log(`  - ${s}`));
       }
     }
 
