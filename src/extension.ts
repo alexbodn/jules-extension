@@ -965,11 +965,11 @@ export class JulesSessionsProvider
         logChannel.appendLine(JSON.stringify(allSessions[0], null, 2));
       }
 
-      logChannel.appendLine(`Jules: Debug - Raw API response sample (first 3 sessions):`);
-      allSessions.slice(0, 3).forEach((s: any, i: number) => {
+      // Debug: Log ALL sessions to help diagnose missing entries
+      logChannel.appendLine(`Jules: Debug - Full Session List (${allSessions.length}):`);
+      allSessions.forEach((s: any, i: number) => {
         const source = s.sourceContext?.source || 'undefined';
         logChannel.appendLine(`  [${i}] name=${s.name}, state=${s.state}, source=${source}, title=${sanitizeForLogging(s.title)}`);
-        logChannel.appendLine(`      updateTime=${s.updateTime}`);
       });
 
       logChannel.appendLine(`Jules: Found ${allSessions.length} total sessions after pagination`);
@@ -1168,9 +1168,9 @@ export class JulesSessionsProvider
     }
 
     // Filter out sessions with closed PRs if the setting is enabled
-    const hideClosedPRs = vscode.workspace
-      .getConfiguration("jules-extension")
-      .get<boolean>("hideClosedPRSessions", true);
+    // FOR DEBUGGING: Force disable this filter to see if sessions appear
+    const hideClosedPRs = false; // vscode.workspace.getConfiguration("jules-extension").get<boolean>("hideClosedPRSessions", true);
+    console.log(`Jules: Debug - hideClosedPRSessions forced to ${hideClosedPRs}`);
 
     if (hideClosedPRs) {
       // We no longer need to check PR status on every render.
