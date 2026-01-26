@@ -965,12 +965,12 @@ export class JulesSessionsProvider
         logChannel.appendLine(JSON.stringify(allSessions[0], null, 2));
       }
 
-      // Debug: Log ALL sessions to help diagnose missing entries
-      logChannel.appendLine(`Jules: Debug - Full Session List (${allSessions.length}):`);
-      allSessions.forEach((s: any, i: number) => {
-        const source = s.sourceContext?.source || 'undefined';
-        logChannel.appendLine(`  [${i}] name=${s.name}, state=${s.state}, source=${source}, title=${sanitizeForLogging(s.title)}`);
-      });
+      // Debug: Log summary of sessions to help diagnose missing entries
+      // logChannel.appendLine(`Jules: Debug - Full Session List (${allSessions.length}):`);
+      // allSessions.forEach((s: any, i: number) => {
+      //   const source = s.sourceContext?.source || 'undefined';
+      //   logChannel.appendLine(`  [${i}] name=${s.name}, state=${s.state}, source=${source}, title=${sanitizeForLogging(s.title)}`);
+      // });
 
       logChannel.appendLine(`Jules: Found ${allSessions.length} total sessions after pagination`);
 
@@ -1168,9 +1168,9 @@ export class JulesSessionsProvider
     }
 
     // Filter out sessions with closed PRs if the setting is enabled
-    // FOR DEBUGGING: Force disable this filter to see if sessions appear
-    const hideClosedPRs = false; // vscode.workspace.getConfiguration("jules-extension").get<boolean>("hideClosedPRSessions", true);
-    console.log(`Jules: Debug - hideClosedPRSessions forced to ${hideClosedPRs}`);
+    const hideClosedPRs = vscode.workspace
+      .getConfiguration("jules-extension")
+      .get<boolean>("hideClosedPRSessions", true);
 
     if (hideClosedPRs) {
       // We no longer need to check PR status on every render.
@@ -1340,7 +1340,8 @@ async function approvePlan(
 
 async function sendMessageToSession(
   context: vscode.ExtensionContext,
-  target?: SessionTreeItem | string
+  target?: SessionTreeItem | string,
+  messageText?: string
 ): Promise<void> {
   const apiKey = await getStoredApiKey(context);
   if (!apiKey) {
@@ -1356,17 +1357,21 @@ async function sendMessageToSession(
   }
 
   try {
-    const result = await showMessageComposer({
-      title: "Send Message to Jules",
-      placeholder: "What would you like Jules to do?",
-    });
+    let userPrompt = messageText;
 
-    if (result === undefined) {
-      vscode.window.showWarningMessage("Message was cancelled and not sent.");
-      return;
+    if (!userPrompt) {
+      const result = await showMessageComposer({
+        title: "Send Message to Jules",
+        placeholder: "What would you like Jules to do?",
+      });
+
+      if (result === undefined) {
+        vscode.window.showWarningMessage("Message was cancelled and not sent.");
+        return;
+      }
+      userPrompt = result.prompt.trim();
     }
 
-    const userPrompt = result.prompt.trim();
     if (!userPrompt) {
       vscode.window.showWarningMessage("Message was empty and not sent.");
       return;

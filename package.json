@@ -72,7 +72,7 @@
         },
         "jules-extension.hideClosedPRSessions": {
           "type": "boolean",
-          "default": true,
+          "default": false,
           "description": "Automatically hide sessions with closed or merged pull requests from the session list"
         },
         "jules-extension.githubToken": {
