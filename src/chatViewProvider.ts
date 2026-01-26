@@ -56,6 +56,11 @@ export class JulesChatViewProvider implements vscode.WebviewViewProvider {
             return;
         }
 
+        // Debug: Log activities to find user messages
+        if (activities.length > 0) {
+            console.log('Jules: Activities sample:', JSON.stringify(activities.slice(0, 3), null, 2));
+        }
+
         this._currentSessionId = session.name;
         const processedActivities = activities.map(a => this._processActivity(a));
 
