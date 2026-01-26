@@ -38,6 +38,8 @@ export interface Activity {
     originator: "user" | "agent";
     id: string;
     type?: string;
+    text?: string;
+    userAction?: { text: string };
     planGenerated?: { plan: Plan };
     planApproved?: { planId: string };
     progressUpdated?: { title: string; description?: string };

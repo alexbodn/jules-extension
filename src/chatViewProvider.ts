@@ -142,7 +142,7 @@ export class JulesChatViewProvider implements vscode.WebviewViewProvider {
             type = 'info';
             icon = '👍';
         } else if (activity.progressUpdated) {
-            content = `**Progress:** ${activity.progressUpdated.title}`;
+            content = `**Progress:** ${activity.progressUpdated.title || 'In progress'}`;
             if (activity.progressUpdated.description) {
                 content += `\n\n${activity.progressUpdated.description}`;
             }
@@ -152,8 +152,19 @@ export class JulesChatViewProvider implements vscode.WebviewViewProvider {
             content = 'Session completed';
             type = 'success';
             icon = '✅';
+        } else if (activity.text) {
+            content = activity.text;
+            type = 'user-message';
+            icon = '👤';
+        } else if (activity.userAction && activity.userAction.text) {
+            content = activity.userAction.text;
+            type = 'user-message';
+            icon = '👤';
         } else {
-            content = 'Unknown activity';
+            // Fallback for unknown activity types - dump JSON to help debug
+            content = `**Unknown Activity (${activity.type || 'no type'}):**\n\`\`\`json\n${JSON.stringify(activity, null, 2)}\n\`\`\``;
+            type = 'info';
+            icon = '❓';
         }
 
         const renderedContent = this._md.render(content);
