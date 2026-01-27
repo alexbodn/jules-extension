@@ -160,6 +160,10 @@ export class JulesChatViewProvider implements vscode.WebviewViewProvider {
             content = activity.userAction.text;
             type = 'user-message';
             icon = '👤';
+        } else if (activity.userMessaged && activity.userMessaged.userMessage) {
+            content = activity.userMessaged.userMessage;
+            type = 'user-message';
+            icon = '👤';
         } else {
             // Fallback for unknown activity types - dump JSON to help debug
             content = `**Unknown Activity (${activity.type || 'no type'}):**\n\`\`\`json\n${JSON.stringify(activity, null, 2)}\n\`\`\``;

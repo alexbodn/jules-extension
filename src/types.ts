@@ -40,6 +40,7 @@ export interface Activity {
     type?: string;
     text?: string;
     userAction?: { text: string };
+    userMessaged?: { userMessage: string };
     planGenerated?: { plan: Plan };
     planApproved?: { planId: string };
     progressUpdated?: { title: string; description?: string };
