@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import MarkdownIt = require('markdown-it');
 import { Activity, Session } from './types';
 import { JulesApiClient } from './julesApiClient';
+import { buildFinalPrompt } from './extension';
 
 export class JulesChatViewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'julesChatView';
@@ -92,11 +93,14 @@ export class JulesChatViewProvider implements vscode.WebviewViewProvider {
     private async _handleSendMessage(text: string) {
         if (!text.trim()) return;
 
+        console.log(`Jules Chat: Sending message to session ${this._currentSessionId}`);
+
         if (this._currentSessionId) {
              try {
                 const apiKey = await this._context.secrets.get("jules-api-key");
                 if (!apiKey) {
                     vscode.window.showErrorMessage("API Key not found.");
+                    console.log('Jules Chat: API Key missing');
                     return;
                 }
                 const client = this._apiClientFactory(apiKey);
@@ -113,13 +117,20 @@ export class JulesChatViewProvider implements vscode.WebviewViewProvider {
                     });
                 }
 
-                await client.sendMessage(this._currentSessionId, text);
+                const finalPrompt = buildFinalPrompt(text);
+                console.log(`Jules Chat: Sending prompt: ${finalPrompt.substring(0, 50)}...`);
+
+                await client.sendMessage(this._currentSessionId, finalPrompt);
+                console.log('Jules Chat: Message sent successfully');
+
                 await vscode.commands.executeCommand('jules-extension.refreshActivities');
 
             } catch (e: any) {
+                console.error(`Jules Chat: Failed to send message: ${e.message}`);
                 vscode.window.showErrorMessage(`Failed to send message: ${e.message}`);
             }
         } else {
+             console.log('Jules Chat: No active session');
              vscode.window.showInformationMessage("Please create or select a session first.");
         }
     }
