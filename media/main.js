@@ -216,6 +216,24 @@
              };
         }
 
+        // Compress multiple progress rows
+        if (activity.displayType === 'progress') {
+            const lastChild = messagesContainer.lastElementChild;
+            if (lastChild && lastChild.classList.contains('progress-message')) {
+                // Update the existing progress message instead of appending a new one
+                const lastContent = lastChild.querySelector('.message-content');
+                if (lastContent) {
+                    lastContent.innerHTML = activity.renderedContent || '';
+                }
+                const lastTime = lastChild.querySelector('.message-time');
+                if (lastTime && activity.createTime) {
+                    lastTime.innerText = new Date(activity.createTime).toLocaleTimeString();
+                }
+                return; // Skip appending the new div
+            }
+            msgDiv.classList.add('progress-message'); // Mark for future compression
+        }
+
         msgDiv.appendChild(headerDiv);
         msgDiv.appendChild(contentDiv);
 
@@ -223,7 +241,10 @@
     }
 
     function scrollToBottom() {
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        // Use requestAnimationFrame to ensure DOM is updated before scrolling
+        requestAnimationFrame(() => {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        });
     }
 
     if (currentSessionId) {

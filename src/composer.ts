@@ -72,7 +72,7 @@ export function getComposerHtml(
     ? `
     <div class="create-pr-container">
       <input type="checkbox" id="create-pr" checked />
-      <label for="create-pr">Create PR automatically?</label>
+      <label for="create-pr">Create PR automatically</label>
     </div>
   `
     : "";
@@ -80,7 +80,7 @@ export function getComposerHtml(
     ? `
     <div class="require-approval-container">
       <input type="checkbox" id="require-approval" />
-      <label for="require-approval">Require plan approval before execution?</label>
+      <label for="require-approval">Require plan approval</label>
     </div>
   `
     : "";

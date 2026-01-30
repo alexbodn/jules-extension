@@ -73,7 +73,7 @@ suite("Composer Test Suite", () => {
         { title: "Test", showCreatePrCheckbox: true },
         "nonce-123"
       );
-      assert.ok(html.includes(`<label for="create-pr">Create PR automatically?</label>`));
+      assert.ok(html.includes(`<label for="create-pr">Create PR automatically</label>`));
     });
 
     test("should not show create PR checkbox when option is false or undefined", () => {
@@ -96,7 +96,7 @@ suite("Composer Test Suite", () => {
       );
       assert.ok(
         html.includes(
-          `<label for="require-approval">Require plan approval before execution?</label>`
+          `<label for="require-approval">Require plan approval</label>`
         )
       );
     });
